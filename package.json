@@ -3,24 +3,34 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "nodemon server.ts",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "ts-node --transpile-only server.ts",
+    "lint": "next lint"
   },
   "dependencies": {
     "next": "16.1.1",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "simple-peer": "^9.11.1",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "streamsaver": "^2.0.6",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/simple-peer": "^9.11.9",
+    "@types/streamsaver": "^2.0.5",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
+    "nodemon": "^3.1.11",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }
