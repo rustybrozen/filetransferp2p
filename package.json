@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "nodemon server.ts",
-    "build": "next build",
-    "start": "ts-node --transpile-only server.ts",
+    "build": "next build && tsc server.ts --module CommonJS --moduleResolution node --target es2019 --outDir dist --esModuleInterop --skipLibCheck",
+    "start": "NODE_ENV=production node dist/server.js",
     "lint": "next lint"
   },
   "dependencies": {
@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^20.19.27",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/simple-peer": "^9.11.9",
@@ -31,6 +31,7 @@
     "nodemon": "^3.1.11",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }
