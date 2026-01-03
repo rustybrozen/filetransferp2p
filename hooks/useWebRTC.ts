@@ -232,7 +232,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
           { urls: "stun:stun.l.google.com:19302" },
           { urls: "stun:global.stun.twilio.com:3478" },
           {
-            urls: "turn:YOUR_VPS_PUBLIC_IP:3478", // Thay IP VPS vào đây
+            urls: "turn:192.9.175.71:3478", 
             username: "admin",
             credential: "admin123",
           },
