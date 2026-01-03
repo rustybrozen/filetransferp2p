@@ -178,16 +178,19 @@ export const useWebRTC = (roomId: string, userName: string) => {
   };
 
   const createPeer = (targetId: string, myId: string, initiator: boolean) => {
-    const peer = new Peer({ 
-        initiator, 
-        trickle: false,
-        config: { 
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' }, 
-                { urls: 'stun:global.stun.twilio.com:3478' }
-            ]
-        }
-    });
+// Trong hàm createPeer
+const peer = new Peer({ 
+    initiator, 
+    trickle: false, // Giữ false cho mạng LAN ổn định
+    config: { 
+    
+        iceTransportPolicy: 'all', 
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' }, 
+            { urls: 'stun:global.stun.twilio.com:3478' }
+        ]
+    }
+});
     peer.on("signal", s => socketRef.current?.emit("signal", { to: targetId, from: myId, signal: s }));
     peer.on("data", d => handleDataStream(d, targetId));
     peer.on("close", () => {
