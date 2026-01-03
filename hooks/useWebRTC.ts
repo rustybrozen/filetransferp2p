@@ -32,6 +32,11 @@ export type IncomingQueueItem = {
   files: string[];
 };
 
+type PeerConnectionStatus = {
+  local: "p2p" | "relay" | null;
+  remote: "p2p" | "relay" | null;
+};
+
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || undefined;
 
 export const useWebRTC = (roomId: string, userName: string) => {
@@ -51,9 +56,20 @@ export const useWebRTC = (roomId: string, userName: string) => {
   const [connectionTypes, setConnectionTypes] = useState<{
     [key: string]: "p2p" | "relay";
   }>({});
-
+  const connStatusRef = useRef<{ [key: string]: PeerConnectionStatus }>({});
   const chunkTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const updateDisplayStatus = (peerId: string) => {
+    const status = connStatusRef.current[peerId];
+    if (!status) return;
 
+    const finalType =
+      status.local === "relay" || status.remote === "relay" ? "relay" : "p2p";
+
+    setConnectionTypes((prev) => {
+      if (prev[peerId] === finalType) return prev;
+      return { ...prev, [peerId]: finalType };
+    });
+  };
   const isFileRejected = (fileId: string) => {
     return rejectedFileIds.current.has(fileId);
   };
@@ -87,7 +103,15 @@ export const useWebRTC = (roomId: string, userName: string) => {
     if (dataStr.startsWith('{"type":')) {
       try {
         const msg = JSON.parse(dataStr);
+        if (msg.type === "conn-update") {
+          if (!connStatusRef.current[fromPeerId])
+            connStatusRef.current[fromPeerId] = { local: null, remote: null };
 
+          connStatusRef.current[fromPeerId].remote = msg.status;
+
+          updateDisplayStatus(fromPeerId);
+          return; // Dừng xử lý, không coi là file
+        }
         if (msg.type === "metadata") {
           const streamSaver = (await import("streamsaver")).default;
           const fileStream = streamSaver.createWriteStream(msg.fileName, {
@@ -161,7 +185,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
             peerId: fromPeerId,
             fileId: activeFileId,
           });
-        } catch (err) {
+        } catch {
           file.writer.abort("Lỗi ghi file").catch(() => {});
           cleanUpFile(activeFileId);
 
@@ -224,57 +248,70 @@ export const useWebRTC = (roomId: string, userName: string) => {
     return peersRef.current[id];
   };
 
-// Thêm đoạn này vào trong hook useWebRTC
-const checkConnectionType = async (peer: Peer.Instance, peerId: string) => {
-    // 🔥 FIX 1: Ép kiểu 'any' để truy cập vào thuộc tính ẩn _pc
+  // Thêm đoạn này vào trong hook useWebRTC
+  const checkConnectionType = async (peer: Peer.Instance, peerId: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nativePeer = peer as any;
-
     if (!nativePeer || !nativePeer._pc) return;
 
     try {
-        const stats = await nativePeer._pc.getStats();
-        // 🔥 FIX 2: Khai báo activeCandidatePair là 'any' để tránh lỗi type checker
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let activeCandidatePair: any = null;
+      const stats = await nativePeer._pc.getStats();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let activeCandidatePair: any = null;
 
-        // 🔥 FIX 3: Ép kiểu report là 'any' trong vòng lặp
+      // Tìm candidate đang active
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stats.forEach((report: any) => {
+        if (report.type === "transport" && report.selectedCandidatePairId) {
+          activeCandidatePair = stats.get(report.selectedCandidatePairId);
+        }
+      });
+
+      // Fallback
+      if (!activeCandidatePair) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         stats.forEach((report: any) => {
-            if (report.type === 'transport' && report.selectedCandidatePairId) {
-                const candidatePair = stats.get(report.selectedCandidatePairId);
-                if (candidatePair) {
-                    activeCandidatePair = candidatePair;
-                }
-            }
+          if (
+            report.type === "candidate-pair" &&
+            report.state === "succeeded" &&
+            report.selected
+          ) {
+            activeCandidatePair = report;
+          }
         });
+      }
 
-        // Fallback: Quét thủ công nếu cách trên không ra
-        if (!activeCandidatePair) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            stats.forEach((report: any) => {
-                if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.selected) {
-                    activeCandidatePair = report;
-                }
-            });
-        }
+      if (activeCandidatePair) {
+        const remoteCandidate = stats.get(
+          activeCandidatePair.remoteCandidateId
+        );
+        if (remoteCandidate) {
+          const localType =
+            remoteCandidate.candidateType === "relay" ? "relay" : "p2p";
 
-        if (activeCandidatePair) {
-            const remoteCandidate = stats.get(activeCandidatePair.remoteCandidateId);
-            if (remoteCandidate) {
-                // 'relay' nghĩa là đi qua TURN Server. Còn lại (host, srflx, prflx) là P2P.
-                const type = remoteCandidate.candidateType === 'relay' ? 'relay' : 'p2p';
-                
-                setConnectionTypes(prev => ({ ...prev, [peerId]: type }));
-                
-                // Log ra console để ông dễ debug
-                console.log(`📡 Kết nối với ${peerId} qua: ${type.toUpperCase()}`);
-            }
+          // 1. Lưu Local Status
+          if (!connStatusRef.current[peerId])
+            connStatusRef.current[peerId] = { local: null, remote: null };
+          connStatusRef.current[peerId].local = localType;
+
+          // 2. Gửi thông tin này cho bạn mình biết
+          // Gửi qua kênh Data Channel (vì lúc này đã kết nối rồi)
+          try {
+            peer.send(
+              JSON.stringify({
+                type: "conn-update",
+                status: localType,
+              })
+            );
+          } catch {}
+
+          updateDisplayStatus(peerId);
         }
+      }
     } catch (err) {
-        console.error("Lỗi check stats:", err);
+      console.error("Check stats error:", err);
     }
-};
+  };
   const createPeer = (targetId: string, myId: string, initiator: boolean) => {
     // Trong hàm createPeer
     const peer = new Peer({
@@ -296,6 +333,8 @@ const checkConnectionType = async (peer: Peer.Instance, peerId: string) => {
     peer.on("connect", () => {
       // Check ngay khi kết nối
       checkConnectionType(peer, targetId);
+      setTimeout(() => checkConnectionType(peer, targetId), 2000);
+      setTimeout(() => checkConnectionType(peer, targetId), 5000);
 
       // Check lại sau 2s cho chắc (vì đôi khi nó đổi đường)
       setTimeout(() => checkConnectionType(peer, targetId), 2000);
