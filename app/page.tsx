@@ -19,7 +19,8 @@ const IconDice = () => <svg className="w-4 h-4" fill="none" stroke="currentColor
 const IconSun = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
 const IconMoon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>;
 
-
+const IconLightning = () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
+const IconCloud = () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>;
 
 type Lang = 'vi' | 'en';
 type Theme = 'light' | 'dark';
@@ -56,6 +57,7 @@ export default function Home() {
     const [activeTask, setActiveTask] = useState<QueueItem | null>(null);
     const [uploadProgress, setUploadProgress] = useState<{ name: string, pct: number } | null>(null);
 
+
     // --- INIT ---
     useEffect(() => {
         setIsMounted(true);
@@ -90,7 +92,7 @@ export default function Home() {
     const {
         peers, getPeerInstance, downloadProgress, rejectIncomingFile, isFileRejected,
         incomingQueues, notifyQueueAdd, notifyQueueRemove, rejectIncomingQueue, rejectedQueueId, resetRejectedQueue,
-        actualRoomId, checkRoomExists
+        actualRoomId, checkRoomExists, connectionTypes
     } = useWebRTC(roomId, username);
 
     // --- HELPER TRANSLATION ---
@@ -214,7 +216,9 @@ export default function Home() {
         };
     };
 
+
     if (!isMounted) return null;
+
 
     // --- ERROR SCREEN ---
     if (isCheckingLink || joinError) {
@@ -316,6 +320,7 @@ export default function Home() {
                     peers.map((peer, index) => {
                         const pos = getPosition(index, peers.length);
                         const { isSending, isReceiving, incoming } = getPeerState(peer.id);
+                        const connType = connectionTypes[peer.id];
 
                         // Dynamic Styles based on Status
                         let ringClass = "border-gray-100 dark:border-zinc-700";
@@ -377,6 +382,16 @@ export default function Home() {
                                     )}
                                 </div>
 
+                                {connType && !incoming && (
+                                    <div className={`absolute -bottom-3 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm border ${connType === 'p2p'
+                                        ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/50 dark:text-green-400'
+                                        : 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/50 dark:text-purple-400'
+                                        }`}>
+                                        {connType === 'p2p' ? <IconLightning /> : <IconCloud />}
+                                        <span>{connType === 'p2p' ? 'Nhanh' : 'Chậm'}</span>
+                                    </div>
+                                )}
+
                                 {/* Actions */}
                                 {incoming && !isReceiving && (
                                     <div className="absolute top-full mt-3 flex gap-2 z-20 animate-in fade-in slide-in-from-top-2">
@@ -387,7 +402,7 @@ export default function Home() {
                                             {text.receive}
                                         </button>
                                         <button
-                                          
+
                                             onClick={() => rejectIncomingQueue(incoming.peerId)}
                                             className="bg-white dark:bg-zinc-800 hover:bg-red-50 dark:hover:bg-zinc-700 text-gray-400 hover:text-red-500 text-[10px] font-bold px-2 py-1.5 rounded-full shadow-md transition-colors"
                                         >
@@ -430,8 +445,8 @@ export default function Home() {
             {showManualModal && (
                 <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-zinc-900 p-6 md:p-8 rounded-3xl w-full max-w-sm shadow-2xl transform transition-all scale-100">
-                     
-                    
+
+
 
                         {/* Tabs */}
                         <div className="flex bg-gray-100 dark:bg-zinc-800 p-1.5 rounded-xl mb-6">

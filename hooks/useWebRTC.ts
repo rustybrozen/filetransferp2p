@@ -48,6 +48,9 @@ export const useWebRTC = (roomId: string, userName: string) => {
   const isInitiated = useRef(false);
   const rejectedFileIds = useRef<Set<string>>(new Set());
   const myDeviceId = useRef(getDeviceId());
+  const [connectionTypes, setConnectionTypes] = useState<{
+    [key: string]: "p2p" | "relay";
+  }>({});
 
   const chunkTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
@@ -221,6 +224,57 @@ export const useWebRTC = (roomId: string, userName: string) => {
     return peersRef.current[id];
   };
 
+// Thêm đoạn này vào trong hook useWebRTC
+const checkConnectionType = async (peer: Peer.Instance, peerId: string) => {
+    // 🔥 FIX 1: Ép kiểu 'any' để truy cập vào thuộc tính ẩn _pc
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nativePeer = peer as any;
+
+    if (!nativePeer || !nativePeer._pc) return;
+
+    try {
+        const stats = await nativePeer._pc.getStats();
+        // 🔥 FIX 2: Khai báo activeCandidatePair là 'any' để tránh lỗi type checker
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let activeCandidatePair: any = null;
+
+        // 🔥 FIX 3: Ép kiểu report là 'any' trong vòng lặp
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        stats.forEach((report: any) => {
+            if (report.type === 'transport' && report.selectedCandidatePairId) {
+                const candidatePair = stats.get(report.selectedCandidatePairId);
+                if (candidatePair) {
+                    activeCandidatePair = candidatePair;
+                }
+            }
+        });
+
+        // Fallback: Quét thủ công nếu cách trên không ra
+        if (!activeCandidatePair) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            stats.forEach((report: any) => {
+                if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.selected) {
+                    activeCandidatePair = report;
+                }
+            });
+        }
+
+        if (activeCandidatePair) {
+            const remoteCandidate = stats.get(activeCandidatePair.remoteCandidateId);
+            if (remoteCandidate) {
+                // 'relay' nghĩa là đi qua TURN Server. Còn lại (host, srflx, prflx) là P2P.
+                const type = remoteCandidate.candidateType === 'relay' ? 'relay' : 'p2p';
+                
+                setConnectionTypes(prev => ({ ...prev, [peerId]: type }));
+                
+                // Log ra console để ông dễ debug
+                console.log(`📡 Kết nối với ${peerId} qua: ${type.toUpperCase()}`);
+            }
+        }
+    } catch (err) {
+        console.error("Lỗi check stats:", err);
+    }
+};
   const createPeer = (targetId: string, myId: string, initiator: boolean) => {
     // Trong hàm createPeer
     const peer = new Peer({
@@ -232,12 +286,19 @@ export const useWebRTC = (roomId: string, userName: string) => {
           { urls: "stun:stun.l.google.com:19302" },
           { urls: "stun:global.stun.twilio.com:3478" },
           {
-            urls: "turn:192.9.175.71:3478", 
+            urls: "turn:192.9.175.71:3478",
             username: "admin",
             credential: "admin123",
           },
         ],
       },
+    });
+    peer.on("connect", () => {
+      // Check ngay khi kết nối
+      checkConnectionType(peer, targetId);
+
+      // Check lại sau 2s cho chắc (vì đôi khi nó đổi đường)
+      setTimeout(() => checkConnectionType(peer, targetId), 2000);
     });
     peer.on("signal", (s) =>
       socketRef.current?.emit("signal", { to: targetId, from: myId, signal: s })
@@ -254,6 +315,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
       chunkTimeouts.current.clear();
       setDownloadProgress(null);
     });
+
     return peer;
   };
 
@@ -342,5 +404,6 @@ export const useWebRTC = (roomId: string, userName: string) => {
     resetRejectedQueue,
     actualRoomId,
     checkRoomExists,
+    connectionTypes,
   };
 };
