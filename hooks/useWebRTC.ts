@@ -353,7 +353,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
         });
 
         socket.on("queue-reject", ({ from }) => {
-            alert("Người dùng đã từ chối nhận file.");
+        
             // Xóa khỏi danh sách chờ (nếu có)
             setAcceptedQueuePeerIds(prev => prev.filter(id => id !== from));
         });

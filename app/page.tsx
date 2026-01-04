@@ -116,11 +116,11 @@ export default function Home() {
 
     // Nút bấm vào Avatar để gửi yêu cầu
     const handleSendRequest = (targetId: string) => {
-        if (selectedFiles.length === 0) return alert("Chưa chọn file nào bro!");
-        if (!connectedPeers.has(targetId)) return alert("Đang kết nối... Đợi xíu!");
+        if (selectedFiles.length === 0) return ;
+        if (!connectedPeers.has(targetId)) return ;
         
         requestSendFile(targetId, selectedFiles.map(f => f.name));
-        alert("Đã gửi yêu cầu! Đợi bên kia đồng ý nhé.");
+       
     };
 
     const handleCreateRoom = () => {
@@ -136,7 +136,7 @@ export default function Home() {
             setRoomId(manualCode);
             setShowJoinModal(false);
         } else {
-            alert("Phòng không tồn tại hoặc sai code!");
+           
         }
     };
 
