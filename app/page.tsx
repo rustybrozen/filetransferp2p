@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useWebRTC, TransferState } from "@/hooks/useWebRTC";
 import { sendFile } from "@/utils/fileTransfer";
 import { QRCodeSVG } from 'qrcode.react';
@@ -13,6 +13,27 @@ const IconFile = () => <svg className="w-5 h-5" fill="none" stroke="currentColor
 const IconSmartphone = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>;
 const IconLightning = () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
 const IconCloud = () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>;
+const IconCheck = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>;
+
+// --- COMPONENT TOAST (Thông báo đẹp thay cho alert) ---
+const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error' | 'info', onClose: () => void }) => {
+    useEffect(() => {
+        const timer = setTimeout(onClose, 3000); // Tự tắt sau 3s
+        return () => clearTimeout(timer);
+    }, [onClose]);
+
+    const bgColors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        info: 'bg-blue-500'
+    };
+
+    return (
+        <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-xl text-white font-bold text-sm flex items-center gap-2 animate-in slide-in-from-top-5 fade-in duration-300 ${bgColors[type]}`}>
+            <span>{message}</span>
+        </div>
+    );
+};
 
 export default function Home() {
     const [isMounted, setIsMounted] = useState(false);
@@ -25,11 +46,17 @@ export default function Home() {
     const [showJoinModal, setShowJoinModal] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [manualCode, setManualCode] = useState("");
+    
+    // Toast State
+    const [toast, setToast] = useState<{msg: string, type: 'success'|'error'|'info'} | null>(null);
+
+    const showToast = (msg: string, type: 'success'|'error'|'info' = 'info') => {
+        setToast({ msg, type });
+    };
 
     const {
         peers,
         connectedPeers,
-        actualRoomId,
         incomingRequests,
         acceptedQueuePeerIds,
         transferProgress,
@@ -50,10 +77,18 @@ export default function Home() {
         setIsMounted(true);
         const stored = localStorage.getItem("p2p_username");
         setUsername(stored || generateIdentity());
+
+        // 🔥 FIX LỖI LINK: Tự động lấy room từ URL nếu có
+        const params = new URLSearchParams(window.location.search);
+        const roomParam = params.get("room");
+        if (roomParam) {
+            setRoomId(roomParam);
+            // Xóa param khỏi URL cho đẹp (optional)
+            window.history.replaceState({}, '', window.location.pathname);
+        }
     }, []);
 
-    // --- LOGIC GỬI FILE ---
-    // Tự động chạy khi có người Accept
+    // --- LOGIC GỬI FILE (FIX EFFECT %) ---
     useEffect(() => {
         const processQueue = async () => {
             if (acceptedQueuePeerIds.length > 0 && selectedFiles.length > 0) {
@@ -65,7 +100,6 @@ export default function Home() {
                         for (const file of selectedFiles) {
                             const fileId = Math.random().toString(36).substring(7);
                             
-                            // Check hủy trước khi gửi
                             if (isCancelled(fileId)) continue;
 
                             await sendFile(
@@ -83,19 +117,26 @@ export default function Home() {
                                     };
                                     setUploadProgressLocal(peerId, state);
                                 },
-                                // Check cancel
                                 () => isCancelled(fileId)
                             );
                         }
-                    } catch (err) {
+                        showToast(`Gửi xong ${selectedFiles.length} file!`, 'success');
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    } catch (err: any) {
                         console.error("Gửi thất bại:", err);
+                        if (err.message !== "Cancelled by sender") {
+                            showToast("Lỗi gửi file!", 'error');
+                        }
                     } finally {
                         resetAccepted(peerId);
-                        setUploadProgressLocal(peerId, null); // Xóa progress khi xong
+                        // 🔥 FIX: Delay 1 chút để người dùng nhìn thấy 100% rồi mới ẩn
+                        setTimeout(() => {
+                             setUploadProgressLocal(peerId, null);
+                        }, 1000);
                     }
                 } else {
-                    // Peer mất kết nối thì cũng reset để không kẹt
                     resetAccepted(peerId);
+                    showToast("Mất kết nối với người nhận", 'error');
                 }
             }
         };
@@ -114,13 +155,12 @@ export default function Home() {
         setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     };
 
-    // Nút bấm vào Avatar để gửi yêu cầu
     const handleSendRequest = (targetId: string) => {
-        if (selectedFiles.length === 0) return ;
-        if (!connectedPeers.has(targetId)) return ;
+        if (selectedFiles.length === 0) return showToast("Chưa chọn file nào bro!", 'error');
+        if (!connectedPeers.has(targetId)) return showToast("Đang kết nối... Đợi xíu!", 'info');
         
         requestSendFile(targetId, selectedFiles.map(f => f.name));
-       
+        showToast("Đã gửi yêu cầu! Đợi bên kia đồng ý.", 'info');
     };
 
     const handleCreateRoom = () => {
@@ -131,18 +171,15 @@ export default function Home() {
 
     const handleJoinRoom = async () => {
         if (!manualCode) return;
-        const exists = await checkRoomExists(manualCode);
-        if (exists) {
-            setRoomId(manualCode);
-            setShowJoinModal(false);
-        } else {
-           
-        }
+        setRoomId(manualCode);
+        setShowJoinModal(false);
+        showToast(`Đang vào phòng ${manualCode}...`, 'info');
     };
 
     const handleCancel = (peerId: string, fileId: string) => {
         cancelTransfer(fileId);
-        setUploadProgressLocal(peerId, null); // Clear UI ngay lập tức
+        setUploadProgressLocal(peerId, null); 
+        showToast("Đã hủy gửi file", 'info');
     };
 
     if (!isMounted) return null;
@@ -150,11 +187,14 @@ export default function Home() {
     return (
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-gray-900 dark:text-gray-100 font-sans flex flex-col relative overflow-hidden transition-colors selection:bg-blue-200">
             
+            {/* TOAST NOTIFICATION */}
+            {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+
             {/* --- HEADER --- */}
             <div className="absolute top-0 w-full p-4 flex justify-between items-center z-20">
                 <div className="flex gap-2">
                     <button onClick={handleCreateRoom} className="bg-black dark:bg-white text-white dark:text-black px-4 py-2 rounded-full font-bold text-xs shadow hover:scale-105 transition">
-                        Tạo Kết Nối
+                        Tạo Phòng
                     </button>
                     <button onClick={() => setShowJoinModal(true)} className="bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 px-4 py-2 rounded-full font-bold text-xs shadow hover:bg-gray-50 transition">
                         Nhập Code
@@ -213,7 +253,7 @@ export default function Home() {
                                         {/* Status Text / Cancel Button */}
                                         <div className="text-[9px] font-bold text-gray-400 mt-1 flex items-center gap-1 z-20">
                                             {progress ? (
-                                                <span onClick={(e) => { e.stopPropagation(); handleCancel(peer.id, progress.fileId); }} className="hover:text-red-500 hover:scale-125 transition">
+                                                <span onClick={(e) => { e.stopPropagation(); handleCancel(peer.id, progress.fileId); }} className="hover:text-red-500 hover:scale-125 transition flex items-center gap-1">
                                                     {progress.percent}% <IconX />
                                                 </span>
                                             ) : isConnected ? 'Sẵn sàng' : 'Đang chờ...'}
@@ -248,11 +288,11 @@ export default function Home() {
                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide min-h-[80px]">
                     {selectedFiles.length === 0 && (
                         <div className="text-gray-400 text-xs italic p-4 w-full text-center border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-xl flex items-center justify-center">
-                            Chưa có file nào. Chọn file rồi bấm vào Avatar để gửi.
+                            Chưa có file nào. Chọn file rồi bấm vào Avatar người muốn gửi.
                         </div>
                     )}
                     {selectedFiles.map((file, idx) => (
-                        <div key={idx} className="shrink-0 w-32 bg-gray-50 dark:bg-zinc-800 p-3 rounded-xl border border-gray-100 dark:border-zinc-700 relative group">
+                        <div key={idx} className="shrink-0 w-32 bg-gray-50 dark:bg-zinc-800 p-3 rounded-xl border border-gray-100 dark:border-zinc-700 relative group animate-in zoom-in-50">
                             <button onClick={() => removeFile(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition">
                                 <IconTrash />
                             </button>
@@ -282,7 +322,7 @@ export default function Home() {
                             <ul className="text-xs space-y-2">
                                 {incomingRequests[0].files.map((f, i) => (
                                     <li key={i} className="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-300">
-                                        <span className="w-1 h-1 bg-gray-400 rounded-full"></span> {f}
+                                        <IconCheck /> {f}
                                     </li>
                                 ))}
                             </ul>
@@ -305,13 +345,19 @@ export default function Home() {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl w-full max-w-xs text-center relative animate-in zoom-in-95">
                          <button onClick={() => setShowCreateModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><IconX /></button>
-                         <h3 className="font-bold text-xl mb-2">Mã Kết Nối</h3>
-                         <div className="text-4xl font-black tracking-widest text-blue-600 mb-6 bg-blue-50 dark:bg-blue-900/20 py-4 rounded-xl border border-blue-100 dark:border-blue-900">{roomId}</div>
+                         <h3 className="font-bold text-xl mb-2">Mã Phòng</h3>
+                         <div className="text-4xl font-black tracking-widest text-blue-600 mb-6 bg-blue-50 dark:bg-blue-900/20 py-4 rounded-xl border border-blue-100 dark:border-blue-900 uppercase">{roomId}</div>
                          
                          <div className="bg-white p-3 rounded-xl border inline-block mb-4">
                              <QRCodeSVG value={`${typeof window !== 'undefined' ? window.location.origin : ''}?room=${roomId}`} size={160} />
                          </div>
-                         <p className="text-xs text-gray-400 font-medium">Đưa người khác quét hoặc nhập mã trên</p>
+                         <p className="text-xs text-gray-400 font-medium">Quét mã hoặc gửi link để kết nối</p>
+                         <button 
+                            onClick={() => { navigator.clipboard.writeText(`${window.location.origin}?room=${roomId}`); showToast("Đã copy link!", 'success'); }}
+                            className="mt-4 text-blue-500 text-xs font-bold hover:underline"
+                         >
+                            Copy Link
+                         </button>
                     </div>
                 </div>
             )}
