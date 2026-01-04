@@ -124,6 +124,8 @@ app.prepare().then(() => {
         callback(!!exists);
     });
 
+    
+
     // 5. Disconnect
     socket.on("disconnect", () => {
       const user = users.get(socket.id);

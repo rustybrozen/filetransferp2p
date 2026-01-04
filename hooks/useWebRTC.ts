@@ -103,6 +103,11 @@ export const useWebRTC = (roomId: string, userName: string) => {
     if (dataStr.startsWith('{"type":')) {
       try {
         const msg = JSON.parse(dataStr);
+        if (msg.type === "cancel") {
+            // Gọi hàm hủy bên phía người nhận ngay lập tức
+            rejectIncomingFile(msg.fileId, fromPeerId, "Người gửi đã hủy");
+            return; 
+        }
         if (msg.type === "conn-update") {
           if (!connStatusRef.current[fromPeerId])
             connStatusRef.current[fromPeerId] = { local: null, remote: null };
@@ -426,6 +431,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
       setIncomingQueues((prev) => prev.filter((q) => q.peerId !== from))
     );
     socket.on("queue-reject", ({ from }) => setRejectedQueueId(from));
+    
 
     return () => {
       socket.disconnect();
@@ -437,8 +443,18 @@ export const useWebRTC = (roomId: string, userName: string) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, userName]);
 
+const cancelOutgoingFile = useCallback((fileId: string, targetPeerId?: string) => { 
+    rejectedFileIds.current.add(fileId);
+    
+
+    if (targetPeerId && socketRef.current) {
+        socketRef.current.emit("transfer-cancel", { to: targetPeerId, fileId });
+    }
+}, []);
+
   return {
     peers,
+    cancelOutgoingFile,
     getPeerInstance,
     downloadProgress,
     rejectIncomingFile,

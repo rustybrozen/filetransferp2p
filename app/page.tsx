@@ -26,7 +26,7 @@ type Lang = 'vi' | 'en';
 type Theme = 'light' | 'dark';
 
 // --- CONFIG ---
-type QueueItem = { id: string; targetId: string; peerName: string; files: FileList; };
+type QueueItem = { id: string; targetId: string; peerName: string; files: File[]; };
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 const MAX_FILE_COUNT = 500;
 
@@ -52,10 +52,10 @@ export default function Home() {
     const [isCheckingLink, setIsCheckingLink] = useState(false);
 
     // File Transfer State
-    const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [queue, setQueue] = useState<QueueItem[]>([]);
     const [activeTask, setActiveTask] = useState<QueueItem | null>(null);
-    const [uploadProgress, setUploadProgress] = useState<{ name: string, pct: number } | null>(null);
+    const [uploadProgress, setUploadProgress] = useState<{ name: string, pct: number, fileId: string } | null>(null);
 
 
     // --- INIT ---
@@ -92,7 +92,7 @@ export default function Home() {
     const {
         peers, getPeerInstance, downloadProgress, rejectIncomingFile, isFileRejected,
         incomingQueues, notifyQueueAdd, notifyQueueRemove, rejectIncomingQueue, rejectedQueueId, resetRejectedQueue,
-        actualRoomId, checkRoomExists, connectionTypes
+        actualRoomId, checkRoomExists, connectionTypes, cancelOutgoingFile
     } = useWebRTC(roomId, username);
 
     // --- HELPER TRANSLATION ---
@@ -148,7 +148,8 @@ export default function Home() {
             await sendBatchFiles(
                 peer,
                 currentTask.files,
-                (fName, pct) => setUploadProgress({ name: fName, pct: Math.round(pct) }),
+
+                (fName, pct, fileId) => setUploadProgress({ name: fName, pct: Math.round(pct), fileId }),
                 (fileId) => isFileRejected(fileId)
             );
         } catch (error) {
@@ -162,9 +163,12 @@ export default function Home() {
     useEffect(() => { processQueue(); }, [processQueue]);
 
     const addToQueue = (targetId: string, peerName: string) => {
-        if (!selectedFiles?.length) return alert(text.noFile);
+        // Check độ dài mảng
+        if (selectedFiles.length === 0) return alert(text.noFile);
 
         if (selectedFiles.length > MAX_FILE_COUNT) return alert(text.tooManyFiles);
+
+        // Loop mảng thường
         for (let i = 0; i < selectedFiles.length; i++) {
             if (selectedFiles[i].size > MAX_FILE_SIZE) return alert(`${text.fileTooBig} ${selectedFiles[i].name}`);
         }
@@ -173,11 +177,17 @@ export default function Home() {
             id: Math.random().toString(36).substr(2, 9),
             targetId,
             peerName,
-            files: selectedFiles
+            files: selectedFiles // Giữ nguyên array này
         };
+
         setQueue(prev => [...prev, newTask]);
-        notifyQueueAdd(targetId, selectedFiles);
-        setSelectedFiles(null);
+
+        // Notify dùng FileList giả lập hoặc sửa notifyQueueAdd nhận mảng (nhưng ở đây gửi metadata ok)
+        // Lưu ý: notifyQueueAdd cần sửa logic bên useWebRTC nếu nó bắt buộc FileList, 
+        // nhưng thường nó chỉ lấy .name nên truyền array vẫn chạy tốt.
+
+        // 👇 QUAN TRỌNG: COMMENT HOẶC XÓA DÒNG NÀY ĐI
+        // setSelectedFiles([]); 
     };
 
     const getPeerState = (peerId: string) => {
@@ -199,10 +209,21 @@ export default function Home() {
     // --- DRAG & DROP ---
     const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
     const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); if (!e.relatedTarget) setIsDragging(false); };
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault(); setIsDragging(false);
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) setSelectedFiles(e.dataTransfer.files);
-    };
+  // [page.tsx] - Tìm hàm handleDrop
+
+const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); 
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        // 👇 SỬA ĐOẠN NÀY:
+        // 1. Dùng Array.from để chuyển FileList -> Array
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        
+        // 2. Nối vào danh sách cũ (để không bị mất file đã chọn trước đó)
+        setSelectedFiles(prev => [...prev, ...droppedFiles]);
+    }
+};
 
 
     const getPosition = (index: number, total: number) => {
@@ -218,6 +239,14 @@ export default function Home() {
 
 
     if (!isMounted) return null;
+    const removeFile = (index: number) => {
+        setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Hàm xóa tất cả
+    const clearAllFiles = () => {
+        setSelectedFiles([]);
+    };
 
 
     // --- ERROR SCREEN ---
@@ -282,13 +311,65 @@ export default function Home() {
                 </div>
 
                 {/* File Button */}
-                <div className="relative pointer-events-auto group">
-                    <button className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-lg transition-all transform duration-200 ${selectedFiles ? 'bg-gray-600 text-white scale-105 ring-4 ring-blue-200 dark:ring-blue-900' : 'bg-white dark:bg-zinc-800 text-gray-800 dark:text-white hover:bg-gray-50 dark:hover:bg-zinc-700'}`}>
-                        <IconFile />
-                        <span>{selectedFiles ? `${selectedFiles.length} ${text.files}` : text.selectFile}</span>
-                    </button>
-                    <input type="file" multiple onChange={e => setSelectedFiles(e.target.files)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                <div className="relative pointer-events-auto flex flex-col items-end gap-2">
+                    {/* Nút Chọn File */}
+                    <div className="relative group">
+                        <button className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-lg transition-all transform duration-200 ${selectedFiles.length > 0 ? 'bg-gray-800 text-white scale-105 ring-4 ring-blue-200 dark:ring-blue-900' : 'bg-white dark:bg-zinc-800 text-gray-800 dark:text-white hover:bg-gray-50 dark:hover:bg-zinc-700'}`}>
+                            <IconFile />
+                            <span>{selectedFiles.length > 0 ? `${selectedFiles.length} ${text.files}` : text.selectFile}</span>
+                        </button>
+
+                        <input
+                            type="file"
+                            multiple
+                            onChange={e => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                    // Convert FileList sang Array và nối vào danh sách cũ
+                                    const newFiles = Array.from(e.target.files);
+                                    setSelectedFiles(prev => [...prev, ...newFiles]);
+
+                                    // Reset value để chọn lại được chính file đó nếu muốn
+                                    e.target.value = '';
+                                }
+                            }}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                        />
+                    </div>
+
+                    {/* 👇 DANH SÁCH FILE ĐÃ CHỌN (MỚI) */}
+                    {selectedFiles.length > 0 && (
+                        <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-2xl shadow-xl border border-gray-100 dark:border-zinc-800 p-2 max-w-[250px] w-full max-h-[300px] overflow-y-auto animate-in slide-in-from-top-2">
+
+                            {/* Header nhỏ: Nút xóa tất cả */}
+                            <div className="flex justify-between items-center px-2 pb-2 mb-2 border-b border-gray-100 dark:border-zinc-800 sticky top-0 bg-transparent">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase">Selected</span>
+                                <button onClick={clearAllFiles} className="text-[10px] text-red-500 hover:underline font-bold">
+                                    Clear All
+                                </button>
+                            </div>
+
+                            {/* List từng file */}
+                            <div className="flex flex-col gap-1">
+                                {selectedFiles.map((file, idx) => (
+                                    <div key={`${file.name}-${idx}`} className="group flex items-center justify-between gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors text-xs">
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="font-bold truncate text-gray-700 dark:text-gray-200">{file.name}</span>
+                                            <span className="text-[10px] text-gray-400">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                                        </div>
+                                        <button
+                                            onClick={() => removeFile(idx)}
+                                            className="text-gray-300 hover:text-red-500 p-1 transition-colors"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
+
+
             </div>
 
             {/* --- MAP VISUALIZATION (CENTER) --- */}
@@ -322,6 +403,13 @@ export default function Home() {
                         const { isSending, isReceiving, incoming } = getPeerState(peer.id);
                         const connType = connectionTypes[peer.id];
 
+                        // --- ĐOẠN 1: Thêm biến lấy phần trăm hiện tại ---
+                        const currentPercent = isSending
+                            ? uploadProgress?.pct || 0
+                            : isReceiving
+                                ? downloadProgress?.percentage || 0
+                                : 0;
+
                         // Dynamic Styles based on Status
                         let ringClass = "border-gray-100 dark:border-zinc-700";
                         let scaleClass = "scale-100";
@@ -329,22 +417,24 @@ export default function Home() {
                         let statusColor = "text-gray-500 dark:text-gray-400";
 
                         if (isSending) {
-                            ringClass = "border-green-500 border-dashed animate-spin";
+                            // 👇 Đã xóa 'animate-spin'
+                            ringClass = "border-green-500 border-dashed";
                             StatusIcon = IconArrowUp;
                             statusColor = "text-green-500";
                         }
                         else if (isReceiving) {
-                            ringClass = "border-blue-500 border-dashed animate-spin";
+                            // 👇 Đã xóa 'animate-spin'
+                            ringClass = "border-blue-500 border-dashed";
                             StatusIcon = IconArrowDown;
                             statusColor = "text-blue-500";
                         }
                         else if (incoming) {
+                            // Cái này rung rung (pulse) để báo hiệu thì giữ lại ok, hoặc xóa animate-pulse nếu muốn
                             ringClass = "border-orange-500 border-4 animate-pulse";
                             scaleClass = "scale-110";
                             StatusIcon = IconPackage;
                             statusColor = "text-orange-500";
                         }
-
                         return (
                             <div
                                 key={peer.id}
@@ -371,8 +461,19 @@ export default function Home() {
                                     )}
 
                                     <div className="flex flex-col items-center p-1 text-gray-700 dark:text-gray-200">
-                                        <div className="mb-1"><StatusIcon /></div>
-                                        <span className={`text-[8px] md:text-[10px] font-bold truncate max-w-[50px] md:max-w-[70px] ${statusColor}`}>{peer.name}</span>
+                                        {/* Nếu đang gửi hoặc nhận thì hiện số %, còn không thì hiện Icon như cũ */}
+                                        {(isSending || isReceiving) ? (
+                                            <div className={`text-sm md:text-lg font-black ${statusColor} animate-pulse`}>
+                                                {currentPercent}%
+                                            </div>
+                                        ) : (
+                                            <div className="mb-1"><StatusIcon /></div>
+                                        )}
+
+                                        {/* Tên User */}
+                                        <span className={`text-[8px] md:text-[10px] font-bold truncate max-w-[50px] md:max-w-[70px] ${statusColor}`}>
+                                            {peer.name}
+                                        </span>
                                     </div>
 
                                     {!incoming && (
@@ -548,7 +649,14 @@ export default function Home() {
                             {/* Cancel */}
                             {downloadProgress && (
                                 <button
-                                    onClick={() => rejectIncomingFile(downloadProgress.fileId, downloadProgress.peerId)}
+                                    onClick={() => {
+                                        if (activeTask && uploadProgress?.fileId) {
+                                            cancelOutgoingFile(uploadProgress.fileId);
+                                        } else if (downloadProgress) {
+
+                                            rejectIncomingFile(downloadProgress.fileId, downloadProgress.peerId);
+                                        }
+                                    }}
                                     className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-50 dark:bg-zinc-800 hover:bg-red-100 dark:hover:bg-red-900/50 text-gray-400 hover:text-red-500 transition-colors"
                                 >
                                     ✕
