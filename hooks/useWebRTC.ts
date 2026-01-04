@@ -3,312 +3,454 @@ import { io, Socket } from "socket.io-client";
 import Peer from "simple-peer";
 import { getDeviceId } from "@/utils/nameGenerator";
 
+export interface User {
+  id: string;
+  name: string;
+  deviceId: string;
+}
+
+export type TransferProgress = {
+  fileName: string;
+  percentage: number;
+  peerId: string;
+  fileId: string;
+};
+
+interface IncomingFile {
+  metadata: {
+    fileId: string;
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+  };
+  writer: WritableStreamDefaultWriter;
+  receivedSize: number;
+}
+
+export type IncomingQueueItem = {
+  peerId: string;
+  files: string[];
+};
+
+type PeerConnectionStatus = {
+  local: "p2p" | "relay" | null;
+  remote: "p2p" | "relay" | null;
+};
+
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || undefined;
 
-// --- TYPES ---
-export interface User { id: string; name: string; deviceId: string; }
-export interface TransferState { type: 'upload' | 'download'; peerId: string; fileId: string; fileName: string; percent: number; }
-export interface IncomingRequest { peerId: string; files: string[]; }
-
 export const useWebRTC = (roomId: string, userName: string) => {
-    // --- STATE QUẢN LÝ ---
-    const [peers, setPeers] = useState<User[]>([]);
-    const [connectedPeers, setConnectedPeers] = useState<Set<string>>(new Set());
-    const [transferProgress, setTransferProgress] = useState<Map<string, TransferState>>(new Map()); 
-    const [incomingRequests, setIncomingRequests] = useState<IncomingRequest[]>([]);
-    const [acceptedQueuePeerIds, setAcceptedQueuePeerIds] = useState<string[]>([]);
-    const [actualRoomId, setActualRoomId] = useState(roomId);
-    const [connectionTypes, setConnectionTypes] = useState<{ [key: string]: "p2p" | "relay" }>({});
+  const [peers, setPeers] = useState<User[]>([]);
+  const [downloadProgress, setDownloadProgress] =
+    useState<TransferProgress | null>(null);
+  const [incomingQueues, setIncomingQueues] = useState<IncomingQueueItem[]>([]);
+  const [rejectedQueueId, setRejectedQueueId] = useState<string | null>(null);
+  const [actualRoomId, setActualRoomId] = useState(roomId);
 
-    // --- REFS ---
-    const socketRef = useRef<Socket | null>(null);
-    const peersRef = useRef<{ [key: string]: Peer.Instance }>({});
+  const socketRef = useRef<Socket | null>(null);
+  const peersRef = useRef<{ [key: string]: Peer.Instance }>({});
+  const incomingFiles = useRef<Map<string, IncomingFile>>(new Map());
+  const isInitiated = useRef(false);
+  const rejectedFileIds = useRef<Set<string>>(new Set());
+  const myDeviceId = useRef(getDeviceId());
+  const [connectionTypes, setConnectionTypes] = useState<{
+    [key: string]: "p2p" | "relay";
+  }>({});
+  const connStatusRef = useRef<{ [key: string]: PeerConnectionStatus }>({});
+  const chunkTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const updateDisplayStatus = (peerId: string) => {
+    const status = connStatusRef.current[peerId];
+    if (!status) return;
+
+    const finalType =
+      status.local === "relay" || status.remote === "relay" ? "relay" : "p2p";
+
+    setConnectionTypes((prev) => {
+      if (prev[peerId] === finalType) return prev;
+      return { ...prev, [peerId]: finalType };
+    });
+  };
+  const isFileRejected = (fileId: string) => {
+    return rejectedFileIds.current.has(fileId);
+  };
+
+  const cleanUpFile = (fileId: string) => {
+    if (chunkTimeouts.current.has(fileId)) {
+      clearTimeout(chunkTimeouts.current.get(fileId)!);
+      chunkTimeouts.current.delete(fileId);
+    }
+    incomingFiles.current.delete(fileId);
+    setDownloadProgress(null);
+  };
+
+  const rejectIncomingFile = useCallback(
+    (fileId: string, peerId: string, reason = "Người dùng từ chối") => {
+      const file = incomingFiles.current.get(fileId);
+      if (file) {
+        file.writer.abort(reason).catch(() => { });
+        cleanUpFile(fileId);
+
+        const peer = peersRef.current[peerId];
+        if (peer) peer.send(JSON.stringify({ type: "reject", fileId }));
+      }
+    },
+    []
+  );
+
+  const handleDataStream = async (data: Buffer, fromPeerId: string) => {
+    const dataStr = data.toString();
+
+    if (dataStr.startsWith('{"type":')) {
+      try {
+        const msg = JSON.parse(dataStr);
+        if (msg.type === "conn-update") {
+          if (!connStatusRef.current[fromPeerId])
+            connStatusRef.current[fromPeerId] = { local: null, remote: null };
+
+          connStatusRef.current[fromPeerId].remote = msg.status;
+
+          updateDisplayStatus(fromPeerId);
+          return; // Dừng xử lý, không coi là file
+        }
+        if (msg.type === "metadata") {
+          const streamSaver = (await import("streamsaver")).default;
+          const fileStream = streamSaver.createWriteStream(msg.fileName, {
+            size: msg.fileSize,
+          });
+          const writer = fileStream.getWriter();
+
+          incomingFiles.current.set(msg.fileId, {
+            metadata: msg,
+            writer,
+            receivedSize: 0,
+          });
+          setDownloadProgress({
+            fileName: msg.fileName,
+            percentage: 0,
+            peerId: fromPeerId,
+            fileId: msg.fileId,
+          });
+
+          const timeout = setTimeout(
+            () =>
+              rejectIncomingFile(msg.fileId, fromPeerId, "Hết thời gian chờ"),
+            30000
+          );
+          chunkTimeouts.current.set(msg.fileId, timeout);
+        } else if (msg.type === "end") {
+          const file = incomingFiles.current.get(msg.fileId);
+          if (file) {
+            await file.writer.close();
+            cleanUpFile(msg.fileId);
+            setIncomingQueues((prev) =>
+              prev.filter((q) => q.peerId !== fromPeerId)
+            );
+          }
+        } else if (msg.type === "reject" || msg.type === "error") {
+          rejectedFileIds.current.add(msg.fileId);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      return;
+    }
+
+    const activeFileId = Array.from(incomingFiles.current.keys()).pop();
+    if (activeFileId) {
+      if (!incomingFiles.current.has(activeFileId)) return;
+
+      if (chunkTimeouts.current.has(activeFileId)) {
+        clearTimeout(chunkTimeouts.current.get(activeFileId)!);
+      }
+      chunkTimeouts.current.set(
+        activeFileId,
+        setTimeout(() => {
+          rejectIncomingFile(activeFileId, fromPeerId, "Mất kết nối quá lâu");
+        }, 30000)
+      );
+
+      const file = incomingFiles.current.get(activeFileId);
+      if (file) {
+        try {
+          const uint8array = new Uint8Array(data);
+          await file.writer.write(uint8array);
+
+          file.receivedSize += uint8array.byteLength;
+          const percent = Math.round(
+            (file.receivedSize / file.metadata.fileSize) * 100
+          );
+          setDownloadProgress({
+            fileName: file.metadata.fileName,
+            percentage: percent,
+            peerId: fromPeerId,
+            fileId: activeFileId,
+          });
+        } catch {
+          file.writer.abort("Lỗi ghi file").catch(() => { });
+          cleanUpFile(activeFileId);
+
+          const peer = peersRef.current[fromPeerId];
+          if (peer) {
+            peer.send(
+              JSON.stringify({
+                type: "error",
+                fileId: activeFileId,
+                reason: "Lỗi ghi file",
+              })
+            );
+          }
+        }
+      }
+    }
+  };
+
+  const notifyQueueAdd = (targetId: string, files: FileList) => {
+    const fileNames = Array.from(files).map((f) => f.name);
+    socketRef.current?.emit("queue-add", { to: targetId, files: fileNames });
+  };
+
+  const notifyQueueRemove = (targetId: string) => {
+    socketRef.current?.emit("queue-remove", { to: targetId });
+  };
+
+  const rejectIncomingQueue = (senderId: string) => {
+    setIncomingQueues((prev) => prev.filter((q) => q.peerId !== senderId));
+    socketRef.current?.emit("queue-reject", { to: senderId });
+  };
+
+  const resetRejectedQueue = () => setRejectedQueueId(null);
+
+  const checkRoomExists = (idToCheck: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!socketRef.current) {
+        const tempSocket = io(SOCKET_URL);
+        tempSocket.emit(
+          "check-room-availability",
+          idToCheck,
+          (exists: boolean) => {
+            tempSocket.disconnect();
+            resolve(exists);
+          }
+        );
+        return;
+      }
+      socketRef.current.emit(
+        "check-room-availability",
+        idToCheck,
+        (exists: boolean) => {
+          resolve(exists);
+        }
+      );
+    });
+  };
+
+  const getPeerInstance = (id: string) => {
+    return peersRef.current[id];
+  };
+
+  // Thêm đoạn này vào trong hook useWebRTC
+  const checkConnectionType = async (peer: Peer.Instance, peerId: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const incomingFiles = useRef<Map<string, { writer: any; metadata: any; received: number }>>(new Map());
-    const chunkTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
-    const cancelledFileIds = useRef<Set<string>>(new Set());
-    const connStatusRef = useRef<{ [key: string]: { local: string | null; remote: string | null } }>({});
+    const nativePeer = peer as any;
+    if (!nativePeer || !nativePeer._pc) return;
 
-    // --- HELPER: CẬP NHẬT PROGRESS UI ---
-    const updateProgress = useCallback((peerId: string, state: TransferState | null) => {
-        setTransferProgress(prev => {
-            const newMap = new Map(prev);
-            if (state) newMap.set(peerId, state);
-            else newMap.delete(peerId);
-            return newMap;
-        });
-    }, []);
+    try {
+      const stats = await nativePeer._pc.getStats();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let activeCandidatePair: any = null;
 
-    const cleanupIncomingFile = useCallback((fileId: string) => {
-        if (chunkTimeouts.current.has(fileId)) {
-            clearTimeout(chunkTimeouts.current.get(fileId)!);
-            chunkTimeouts.current.delete(fileId);
+      // Tìm candidate đang active
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stats.forEach((report: any) => {
+        if (report.type === "transport" && report.selectedCandidatePairId) {
+          activeCandidatePair = stats.get(report.selectedCandidatePairId);
         }
-        incomingFiles.current.delete(fileId);
-    }, []);
+      });
 
-    // --- LOGIC: CHECK P2P / RELAY ---
-    const updateDisplayStatus = (peerId: string) => {
-        const status = connStatusRef.current[peerId];
-        if (!status) return;
-        const finalType = (status.local === 'relay' || status.remote === 'relay') ? 'relay' : 'p2p';
-        setConnectionTypes(prev => ({ ...prev, [peerId]: finalType }));
-    };
-
-    const checkConnectionType = async (peer: Peer.Instance, peerId: string) => {
+      // Fallback
+      if (!activeCandidatePair) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const nativePeer = peer as any;
-        if (!nativePeer || !nativePeer._pc) return;
+        stats.forEach((report: any) => {
+          if (
+            report.type === "candidate-pair" &&
+            report.state === "succeeded" &&
+            report.selected
+          ) {
+            activeCandidatePair = report;
+          }
+        });
+      }
 
+      if (activeCandidatePair) {
+        const remoteCandidate = stats.get(
+          activeCandidatePair.remoteCandidateId
+        );
+        if (remoteCandidate) {
+          const localType =
+            remoteCandidate.candidateType === "relay" ? "relay" : "p2p";
+
+          // 1. Lưu Local Status
+          if (!connStatusRef.current[peerId])
+            connStatusRef.current[peerId] = { local: null, remote: null };
+          connStatusRef.current[peerId].local = localType;
+
+          // 2. Gửi thông tin này cho bạn mình biết
+          // Gửi qua kênh Data Channel (vì lúc này đã kết nối rồi)
+          try {
+            peer.send(
+              JSON.stringify({
+                type: "conn-update",
+                status: localType,
+              })
+            );
+          } catch { }
+
+          updateDisplayStatus(peerId);
+        }
+      }
+    } catch (err) {
+      console.error("Check stats error:", err);
+    }
+  };
+  const createPeer = (targetId: string, myId: string, initiator: boolean) => {
+    // Trong hàm createPeer
+    const peer = new Peer({
+      initiator,
+      trickle: false, // Giữ false cho mạng LAN ổn định
+      config: {
+        iceTransportPolicy: "all",
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:global.stun.twilio.com:3478" },
+          {
+            urls: "turn:192.9.175.71:3478",
+            username: "admin",
+            credential: "admin123",
+          },
+        ],
+      },
+    });
+    peer.on("connect", () => {
+      // Check ngay khi kết nối
+      checkConnectionType(peer, targetId);
+      setTimeout(() => checkConnectionType(peer, targetId), 2000);
+      setTimeout(() => checkConnectionType(peer, targetId), 5000);
+
+      // Check lại sau 2s cho chắc (vì đôi khi nó đổi đường)
+      setTimeout(() => checkConnectionType(peer, targetId), 2000);
+    });
+    peer.on("signal", (s) =>
+      socketRef.current?.emit("signal", { to: targetId, from: myId, signal: s })
+    );
+    peer.on("data", (d) => handleDataStream(d, targetId));
+    peer.on("close", () => {
+      incomingFiles.current.forEach((f) => {
         try {
-            const stats = await nativePeer._pc.getStats();
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let activeCandidatePair: any = null;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            stats.forEach((report: any) => {
-                if (report.type === 'transport' && report.selectedCandidatePairId) {
-                    activeCandidatePair = stats.get(report.selectedCandidatePairId);
-                }
-            });
-            if (!activeCandidatePair) {
-                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                 stats.forEach((report: any) => {
-                    if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.selected) {
-                        activeCandidatePair = report;
-                    }
-                });
-            }
+          f.writer.abort("Ngắt kết nối");
+        } catch (e) { }
+      });
+      incomingFiles.current.clear();
+      chunkTimeouts.current.forEach((t) => clearTimeout(t));
+      chunkTimeouts.current.clear();
+      setDownloadProgress(null);
+    });
 
-            if (activeCandidatePair) {
-                const remoteCandidate = stats.get(activeCandidatePair.remoteCandidateId);
-                if (remoteCandidate) {
-                    const localType = remoteCandidate.candidateType === 'relay' ? 'relay' : 'p2p';
-                    if (!connStatusRef.current[peerId]) connStatusRef.current[peerId] = { local: null, remote: null };
-                    connStatusRef.current[peerId].local = localType;
-                    try { peer.send(JSON.stringify({ type: 'conn-update', status: localType })); } catch {}
-                    updateDisplayStatus(peerId);
-                }
-            }
-        } catch (err) { console.error(err); }
+
+    peer.on("error", () => {
+   
+
+      alert("Kết nối bị ngắt đột ngột!");
+  
+      incomingFiles.current.forEach((f, fileId) => cleanUpFile(fileId));
+    });
+    return peer;
+  };
+
+  useEffect(() => {
+    if (!userName || isInitiated.current) return;
+    isInitiated.current = true;
+
+    const socket = io(SOCKET_URL, { reconnection: true, forceNew: true });
+    socketRef.current = socket;
+
+    socket.on("connect", () =>
+      socket.emit("join-room", {
+        roomId,
+        name: userName,
+        deviceId: myDeviceId.current,
+      })
+    );
+    socket.on("room-assigned", (id) => setActualRoomId(id));
+
+    socket.on("existing-users", (users: User[]) => {
+      const uniquePeers = users.filter(
+        (u) => u.deviceId !== myDeviceId.current
+      );
+      uniquePeers.forEach((u) => {
+        if (!peersRef.current[u.id])
+          peersRef.current[u.id] = createPeer(u.id, socket.id!, true);
+      });
+      setPeers(uniquePeers);
+    });
+
+    socket.on("user-joined", (u: User) => {
+      if (u.deviceId === myDeviceId.current) return;
+      setPeers((p) => (p.find((x) => x.id === u.id) ? p : [...p, u]));
+    });
+
+    socket.on("user-left", (id) => {
+      peersRef.current[id]?.destroy();
+      delete peersRef.current[id];
+      setPeers((p) => p.filter((x) => x.id !== id));
+      setIncomingQueues((prev) => prev.filter((q) => q.peerId !== id));
+    });
+
+    socket.on("signal", ({ from, signal }) => {
+      const p = peersRef.current[from];
+      if (p) p.signal(signal);
+      else {
+        const newP = createPeer(from, socket.id!, false);
+        peersRef.current[from] = newP;
+        newP.signal(signal);
+      }
+    });
+
+    socket.on("queue-add", ({ from, files }) => {
+      setIncomingQueues((prev) => {
+        const exists = prev.find((q) => q.peerId === from);
+        if (exists) return prev;
+        return [...prev, { peerId: from, files }];
+      });
+    });
+    socket.on("queue-remove", ({ from }) =>
+      setIncomingQueues((prev) => prev.filter((q) => q.peerId !== from))
+    );
+    socket.on("queue-reject", ({ from }) => setRejectedQueueId(from));
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+      Object.values(peersRef.current).forEach((p) => p.destroy());
+      peersRef.current = {};
+      isInitiated.current = false;
     };
-
-    // --- HANDLER: NHẬN DỮ LIỆU ---
-    const handleDataStream = async (data: Buffer, fromPeerId: string) => {
-        const dataStr = data.toString();
-
-        if (dataStr.startsWith('{"type":')) {
-            try {
-                const msg = JSON.parse(dataStr);
-                
-                if (msg.type === "conn-update") {
-                    if (!connStatusRef.current[fromPeerId]) connStatusRef.current[fromPeerId] = { local: null, remote: null };
-                    connStatusRef.current[fromPeerId].remote = msg.status;
-                    updateDisplayStatus(fromPeerId);
-                    return;
-                }
-                
-                if (msg.type === "metadata") {
-                    const streamSaver = (await import("streamsaver")).default;
-                    const fileStream = streamSaver.createWriteStream(msg.fileName, { size: msg.fileSize });
-                    const writer = fileStream.getWriter();
-
-                    incomingFiles.current.set(msg.fileId, { writer, metadata: msg, received: 0 });
-                    
-                    updateProgress(fromPeerId, { 
-                        type: 'download', peerId: fromPeerId, fileId: msg.fileId, 
-                        fileName: msg.fileName, percent: 0 
-                    });
-
-                    chunkTimeouts.current.set(msg.fileId, setTimeout(() => {
-                        writer.abort("Timeout");
-                        cleanupIncomingFile(msg.fileId);
-                        updateProgress(fromPeerId, null);
-                    }, 30000));
-                } 
-                else if (msg.type === "cancel") {
-                    const f = incomingFiles.current.get(msg.fileId);
-                    if (f) {
-                        f.writer.abort("Sender cancelled").catch(() => {});
-                        cleanupIncomingFile(msg.fileId);
-                        updateProgress(fromPeerId, null);
-                    }
-                }
-                else if (msg.type === "end") {
-                    const f = incomingFiles.current.get(msg.fileId);
-                    if (f) {
-                        await f.writer.close();
-                        cleanupIncomingFile(msg.fileId);
-                        // Delay ẩn UI để người dùng thấy 100%
-                        setTimeout(() => updateProgress(fromPeerId, null), 1000);
-                    }
-                }
-            } catch (e) { console.error(e); }
-            return;
-        }
-
-        const activeFileEntry = Array.from(incomingFiles.current.entries()).pop(); 
-        if (!activeFileEntry) return;
-        const [fileId, fileData] = activeFileEntry;
-
-        if (chunkTimeouts.current.has(fileId)) {
-            clearTimeout(chunkTimeouts.current.get(fileId)!);
-            chunkTimeouts.current.set(fileId, setTimeout(() => {
-                fileData.writer.abort("Timeout");
-                cleanupIncomingFile(fileId);
-                updateProgress(fromPeerId, null);
-            }, 30000));
-        }
-
-        try {
-            const uint8 = new Uint8Array(data);
-            await fileData.writer.write(uint8);
-            fileData.received += uint8.byteLength;
-            const pct = Math.round((fileData.received / fileData.metadata.fileSize) * 100);
-            updateProgress(fromPeerId, { type: 'download', peerId: fromPeerId, fileId, fileName: fileData.metadata.fileName, percent: pct });
-        } catch (err) {
-            cleanupIncomingFile(fileId);
-            updateProgress(fromPeerId, null);
-        }
-    };
-
-    const requestSendFile = (targetId: string, fileNames: string[]) => {
-        socketRef.current?.emit("queue-add", { to: targetId, files: fileNames });
-    };
-
-    const acceptRequest = (senderId: string) => {
-        setIncomingRequests(prev => prev.filter(r => r.peerId !== senderId));
-        socketRef.current?.emit("queue-accept", { to: senderId });
-    };
-
-    const rejectRequest = (senderId: string) => {
-        setIncomingRequests(prev => prev.filter(r => r.peerId !== senderId));
-        socketRef.current?.emit("queue-reject", { to: senderId });
-    };
-
-    const cancelTransfer = (fileId: string) => cancelledFileIds.current.add(fileId);
-    const isCancelled = (fileId: string) => cancelledFileIds.current.has(fileId);
-
-    const createPeer = (targetId: string, myId: string, initiator: boolean) => {
-        const peer = new Peer({
-            initiator,
-            trickle: false, 
-            config: {
-                iceTransportPolicy: "all",
-                iceServers: [
-                    { urls: "stun:stun.l.google.com:19302" },
-                    { urls: "stun:global.stun.twilio.com:3478" },
-                    // 🔥 TURN Server
-                    { urls: "turn:192.9.175.71:3478", username: "admin", credential: "admin123" },
-                ],
-            },
-        });
-
-        peer.on("connect", () => {
-            setConnectedPeers(prev => new Set(prev).add(targetId));
-            checkConnectionType(peer, targetId);
-            setTimeout(() => checkConnectionType(peer, targetId), 2000);
-        });
-
-        peer.on("signal", (s) => socketRef.current?.emit("signal", { to: targetId, from: myId, signal: s }));
-        peer.on("data", (d) => handleDataStream(d, targetId));
-        
-        const handleClose = () => {
-            setConnectedPeers(prev => { const s = new Set(prev); s.delete(targetId); return s; });
-            updateProgress(targetId, null);
-            incomingFiles.current.forEach(f => { try{f.writer.abort("Connection closed")}catch{} });
-            incomingFiles.current.clear();
-        };
-
-        peer.on("close", handleClose);
-        peer.on("error", handleClose);
-
-        return peer;
-    };
-
-    useEffect(() => {
-        if (!userName) return;
-        const socket = io(SOCKET_URL!, { reconnection: true, forceNew: true });
-        socketRef.current = socket;
-
-        socket.on("connect", () => {
-             socket.emit("join-room", { roomId, name: userName, deviceId: getDeviceId() });
-        });
-
-        socket.on("room-assigned", (id) => setActualRoomId(id));
-        
-        socket.on("existing-users", (users: User[]) => {
-            const unique = users.filter(u => u.deviceId !== getDeviceId());
-            unique.forEach(u => {
-                if(!peersRef.current[u.id]) peersRef.current[u.id] = createPeer(u.id, socket.id!, true);
-            });
-            setPeers(unique);
-        });
-
-        socket.on("user-joined", (u: User) => {
-            if (u.deviceId === getDeviceId()) return;
-            setPeers(p => p.find(x => x.id === u.id) ? p : [...p, u]);
-        });
-
-        socket.on("user-left", (id) => {
-            peersRef.current[id]?.destroy();
-            delete peersRef.current[id];
-            setPeers(p => p.filter(u => u.id !== id));
-            setConnectedPeers(prev => { const s = new Set(prev); s.delete(id); return s; });
-            setIncomingRequests(prev => prev.filter(r => r.peerId !== id));
-        });
-
-        socket.on("signal", ({ from, signal }) => {
-            const p = peersRef.current[from];
-            if (p) p.signal(signal);
-            else {
-                const newP = createPeer(from, socket.id!, false);
-                peersRef.current[from] = newP;
-                newP.signal(signal);
-            }
-        });
-
-        socket.on("queue-add", ({ from, files }) => {
-            setIncomingRequests(prev => {
-                if (prev.find(r => r.peerId === from)) return prev;
-                return [...prev, { peerId: from, files }];
-            });
-        });
-
-        socket.on("queue-accept", ({ from }) => setAcceptedQueuePeerIds(prev => [...prev, from]));
-        socket.on("queue-reject", ({ from }) => setAcceptedQueuePeerIds(prev => prev.filter(id => id !== from)));
-        socket.on("queue-remove", ({from}) => setIncomingRequests(prev => prev.filter(r => r.peerId !== from)));
-
-        return () => {
-            socket.disconnect();
-            Object.values(peersRef.current).forEach(p => p.destroy());
-        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [roomId, userName]);
+  }, [roomId, userName]);
 
-    const getPeer = (id: string) => peersRef.current[id];
-    const resetAccepted = (id: string) => setAcceptedQueuePeerIds(prev => prev.filter(p => p !== id));
-    
-    // Check room kiểu "mềm" (luôn true để user vào được, nếu ko có ai thì ngồi đợi)
-    const checkRoomExists = async (idToCheck: string): Promise<boolean> => {
-        return true; 
-    };
-
-    return {
-        peers,
-        connectedPeers,
-        actualRoomId,
-        incomingRequests,
-        acceptedQueuePeerIds,
-        transferProgress,
-        connectionTypes,
-        getPeer,
-        requestSendFile,
-        acceptRequest,
-        rejectRequest,
-        cancelTransfer,
-        isCancelled,
-        resetAccepted,
-        checkRoomExists,
-        setUploadProgressLocal: updateProgress
-    };
+  return {
+    peers,
+    getPeerInstance,
+    downloadProgress,
+    rejectIncomingFile,
+    isFileRejected,
+    incomingQueues,
+    notifyQueueAdd,
+    notifyQueueRemove,
+    rejectIncomingQueue,
+    rejectedQueueId,
+    resetRejectedQueue,
+    actualRoomId,
+    checkRoomExists,
+    connectionTypes,
+  };
 };
