@@ -105,12 +105,17 @@ app.prepare().then(() => {
     });
 
     // 3. Queue Logic
-    socket.on("queue-add", ({ to, files }: { to: string; files: string[] }) => {
+socket.on("queue-add", ({ to, files }: { to: string; files: string[] }) => {
       io.to(to).emit("queue-add", { from: socket.id, files });
     });
 
     socket.on("queue-remove", ({ to }: { to: string }) => {
       io.to(to).emit("queue-remove", { from: socket.id });
+    });
+
+    // 🔥 MỚI: Sự kiện chấp nhận file
+    socket.on("queue-accept", ({ to }: { to: string }) => {
+      io.to(to).emit("queue-accept", { from: socket.id });
     });
 
     socket.on("queue-reject", ({ to }: { to: string }) => {
