@@ -105,27 +105,31 @@ export const sendFile = async (
 export const sendBatchFiles = async (
   peer: Peer.Instance,
   files: FileList | File[],
-  onProgress: (fileName: string, percent: number, fileId: string) => void,
+  onProgress: (fileName: string, percent: number, fileId: string, current: number, total: number) => void,
   isCancelled: (fileId: string) => boolean
 ) => {
   const fileArray = Array.from(files);
-  for (const file of fileArray) {
+  const total = fileArray.length;
+  for (let i = 0; i < total; i++) {
     try {
+      const file = fileArray[i];
+
       await sendFile(
         peer,
         file,
         (percent, fileId) => {
-          onProgress(file.name, percent, fileId);
+        
+          onProgress(file.name, percent, fileId, i + 1, total);
         },
         isCancelled
       );
     } catch (err) {
-      // 👇 Check nếu lỗi do Cancel thì throw luôn để thoát loop
+     
 
       if (
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (err as any).message === "Transfer cancelled" ||
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (err as any).message === "Cancelled by sender"
       ) {
         throw err; // Ném lỗi ra để thằng page.tsx bắt được và tắt UI

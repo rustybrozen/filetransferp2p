@@ -68,14 +68,39 @@ export default function Home() {
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [queue, setQueue] = useState<QueueItem[]>([]);
     const [activeTask, setActiveTask] = useState<QueueItem | null>(null);
-    const [uploadProgress, setUploadProgress] = useState<{ name: string, pct: number, fileId: string } | null>(null);
+    const [uploadProgress, setUploadProgress] = useState<{ name: string, pct: number, fileId: string, current: number, total: number } | null>(null);
 
     const [showFilesModal, setShowFilesModal] = useState(false);
 
     const [waitingForPeer, setWaitingForPeer] = useState<string | null>(null); // A đang chờ B (lưu ID của B)
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
+    useEffect(() => {
+        const handleOffline = () => {
+            // Khi mất mạng: Báo lỗi đỏ, rung máy (nếu có thể), chặn thao tác
+            toast.error("Mất kết nối mạng! Quá trình truyền file có thể bị gián đoạn.", {
+                duration: 5000,
+            });
+        };
 
+        const handleOnline = () => {
+            // Khi có mạng lại: Báo xanh, nhắc user kiểm tra
+            toast.success("Đã có mạng trở lại. Nếu tiến trình bị đứng, hãy tải lại trang.", {
+                duration: 5000,
+            });
+
+            // Pro tip: Có thể thử reconnect socket ở đây nếu muốn
+            // if (!socketRef.current?.connected) socketRef.current?.connect();
+        };
+
+        window.addEventListener('offline', handleOffline);
+        window.addEventListener('online', handleOnline);
+
+        return () => {
+            window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('online', handleOnline);
+        };
+    }, []);
     // --- INIT ---
     useEffect(() => {
         setIsMounted(true);
@@ -117,9 +142,35 @@ export default function Home() {
 
 
 
-    // --- HELPER TRANSLATION ---
-    const text = t[lang];
+    const requestWakeLock = async () => {
+        try {
+            if ('wakeLock' in navigator) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await (navigator as any).wakeLock.request('screen');
+                console.log('Screen Wake Lock active');
+            }
+        } catch {
 
+        }
+    };
+
+
+    const text = t[lang];
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+
+            const isBusy = activeTask || Object.keys(downloadProgresses).length > 0;
+
+            if (isBusy) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [activeTask, downloadProgresses]);
 
     useEffect(() => {
         if (acceptedPeerId && waitingForPeer === acceptedPeerId) {
@@ -205,6 +256,29 @@ export default function Home() {
             resetRejectedQueue();
         }
     }, [rejectedQueueId, resetRejectedQueue]);
+    useEffect(() => {
+        if (activeTask || Object.keys(downloadProgresses).length > 0) {
+            requestWakeLock();
+        }
+
+    }, [activeTask, downloadProgresses]);
+
+
+    const filterDuplicates = (newFiles: File[], currentFiles: File[]) => {
+        const unique = newFiles.filter(nf =>
+            !currentFiles.some(cf =>
+                cf.name === nf.name &&
+                cf.size === nf.size &&
+                cf.lastModified === nf.lastModified
+            )
+        );
+
+        if (unique.length < newFiles.length) {
+            toast('Loại các file trùng lặp!');
+        }
+
+        return unique;
+    };
 
     const processQueue = useCallback(async () => {
         if (activeTask || queue.length === 0) return;
@@ -220,12 +294,21 @@ export default function Home() {
             await sendBatchFiles(
                 peer,
                 currentTask.files,
-
-                (fName, pct, fileId) => setUploadProgress({ name: fName, pct: Math.round(pct), fileId }),
+                // 👇 SỬA DÒNG NÀY: Hứng thêm current, total
+                (fName, pct, fileId, current, total) => setUploadProgress({
+                    name: fName,
+                    pct: Math.round(pct),
+                    fileId,
+                    current, // Lưu vào state
+                    total    // Lưu vào state
+                }),
                 (fileId) => isFileRejected(fileId)
             );
+
+            toast.success(`Đã gửi ${currentTask.files.length} file cho ${currentTask.peerName}!`);
         } catch (error) {
-            console.error(error);
+
+            toast.error("Có lỗi xảy ra khi gửi file!");
         } finally {
             setActiveTask(null);
             setUploadProgress(null);
@@ -285,11 +368,11 @@ export default function Home() {
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
-
+        
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const droppedFiles = Array.from(e.dataTransfer.files);
-
-            setSelectedFiles(prev => [...prev, ...droppedFiles]);
+            const uniqueFiles = filterDuplicates(droppedFiles, selectedFiles);
+            setSelectedFiles(prev => [...prev, ...uniqueFiles]);
         }
     };
 
@@ -363,8 +446,8 @@ export default function Home() {
 
 
 
-// --- MÀN HÌNH ERROR / CHECKING ---
-if (isCheckingLink || joinError) {
+    // --- MÀN HÌNH ERROR / CHECKING ---
+    if (isCheckingLink || joinError) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-950 text-zinc-200 font-sans">
                 <div className="bg-zinc-900 rounded-2xl p-8 text-center border border-zinc-800 max-w-sm w-full mx-4">
@@ -450,7 +533,11 @@ if (isCheckingLink || joinError) {
                             onChange={e => {
                                 if (e.target.files && e.target.files.length > 0) {
                                     const newFiles = Array.from(e.target.files);
-                                    setSelectedFiles(prev => [...prev, ...newFiles]);
+
+
+                                    const uniqueFiles = filterDuplicates(newFiles, selectedFiles);
+
+                                    setSelectedFiles(prev => [...prev, ...uniqueFiles]);
                                     e.target.value = '';
                                 }
                             }}
@@ -471,14 +558,14 @@ if (isCheckingLink || joinError) {
 
             {/* --- MAP VISUALIZATION (CENTER) --- */}
             <div className="flex-1 flex items-center justify-center relative mt-16 md:mt-0">
-                
+
                 {/* Cleaned up decorative rings (Deleted) */}
 
                 {/* YOU (Center Node) */}
                 <div className="relative z-20 w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center border-4 border-zinc-800 shadow-lg">
                     <div className="flex flex-col items-center text-zinc-400">
                         <IconUser />
-                        <span className="text-[10px] font-bold mt-1 uppercase tracking-widest text-zinc-600">{text.you}</span>
+
                     </div>
                 </div>
 
@@ -538,13 +625,7 @@ if (isCheckingLink || joinError) {
                                 className="absolute flex flex-col items-center justify-center transition-all duration-500"
                                 style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
                             >
-                                {/* Connection Line - Simple gray line */}
-                                <div
-                                    className="absolute top-1/2 left-1/2 w-[120px] md:w-[220px] h-[1px] bg-zinc-800 -z-10 origin-left"
-                                    style={{
-                                        transform: `rotate(${(index / peers.length) * 360 - 90}deg) translate(-50%, -50%)`,
-                                    }}
-                                ></div>
+
 
                                 {/* Peer Node Bubble */}
                                 <div
@@ -566,7 +647,7 @@ if (isCheckingLink || joinError) {
                                     <div className="flex flex-col items-center p-1">
                                         {(isSending || isReceiving) ? (
                                             <div className={`text-sm font-bold ${statusColor} flex flex-col items-center leading-tight`}>
-                                                 <span>{currentPercent}%</span>
+                                                <span>{currentPercent}%</span>
                                             </div>
                                         ) : (
                                             <div className={`mb-1 ${statusColor}`}><StatusIcon /></div>
@@ -577,9 +658,9 @@ if (isCheckingLink || joinError) {
                                         </span>
                                     </div>
                                 </div>
-                                
+
                                 {/* Connection Type Label */}
-                                {connType && !incoming && connType === 'p2p' &&  (
+                                {connType && !incoming && connType === 'p2p' && (
                                     <div className="absolute -bottom-4 bg-zinc-950 border border-zinc-800 text-zinc-500 px-2 py-0.5 rounded text-[8px] font-bold uppercase">
                                         FAST
                                     </div>
@@ -626,7 +707,7 @@ if (isCheckingLink || joinError) {
             </div>
 
             {/* --- MODALS --- */}
-            
+
             {/* 1. FILE LIST MODAL */}
             {showFilesModal && (
                 <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
@@ -843,32 +924,48 @@ if (isCheckingLink || joinError) {
             {/* 6. PROGRESS BAR (Gray Scale) */}
             {(activeTask || downloadProgresses) && (
                 <div className="fixed bottom-12 left-4 right-4 z-40 flex flex-col gap-2 pointer-events-none">
-                    {/* UPLOAD */}
+
                     {activeTask && uploadProgress && (
-                        <div className="pointer-events-auto max-w-md mx-auto w-full bg-zinc-900 rounded-xl border border-zinc-800 p-3 relative overflow-hidden">
+                        <div className="pointer-events-auto max-w-md mx-auto w-full bg-zinc-900 rounded-xl border border-zinc-800 p-3 relative overflow-hidden animate-in slide-in-from-bottom-5">
+
+                            {/* Background Progress Bar */}
                             <div className="absolute top-0 left-0 bottom-0 bg-zinc-800 transition-all duration-300" style={{ width: `${uploadProgress.pct}%` }}></div>
+
                             <div className="relative flex items-center gap-3">
+                                {/* Icon */}
                                 <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-zinc-950 text-white border border-zinc-800">
                                     <IconArrowUp />
                                 </div>
+
+                                {/* Info */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center">
                                         <span className="font-bold text-xs text-white truncate pr-2">
                                             {text.sendingTo} {activeTask.peerName}
+
+
+                                            {uploadProgress?.total && uploadProgress.total > 1 && (
+                                                <span className="ml-1 text-[10px] text-zinc-400 font-normal">
+                                                    ({uploadProgress.current}/{uploadProgress.total})
+                                                </span>
+                                            )}
                                         </span>
+
                                         <span className="text-[10px] font-black text-white bg-black/50 px-1.5 py-0.5 rounded">
                                             {uploadProgress.pct}%
                                         </span>
                                     </div>
                                     <div className="text-[10px] text-zinc-400 truncate">{uploadProgress.name}</div>
                                 </div>
+
+
                                 <button
                                     onClick={() => {
                                         cancelOutgoingFile(uploadProgress.fileId, activeTask.targetId);
                                         setActiveTask(null);
                                         setUploadProgress(null);
                                     }}
-                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-white"
+                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-white transition-colors"
                                 >
                                     ✕
                                 </button>
@@ -911,9 +1008,9 @@ if (isCheckingLink || joinError) {
                 position="bottom-center"
                 toastOptions={{
                     style: {
-                        background: '#18181b', 
+                        background: '#18181b',
                         color: '#fff',
-                        border: '1px solid #27272a', 
+                        border: '1px solid #27272a',
                         borderRadius: '8px',
                         padding: '12px',
                         fontSize: '14px',
