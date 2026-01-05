@@ -12,3 +12,10 @@ export interface FileEnd {
   fileId: string;
 }
 
+export interface TextNote {
+  type: 'text-note';
+  id: string;
+  senderId: string;
+  content: string;
+  timestamp: number;
+}

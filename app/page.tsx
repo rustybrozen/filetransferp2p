@@ -7,6 +7,7 @@ import { generateIdentity } from "@/utils/nameGenerator";
 import { QRCodeSVG } from 'qrcode.react';
 import { t } from '../utils/translation';
 import toast, { Toaster } from 'react-hot-toast';
+import { TextNote } from "@/types/transfer";
 
 
 const IconFile = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
@@ -16,12 +17,12 @@ const IconSmartphone = () => <svg className="w-6 h-6" fill="none" stroke="curren
 const IconArrowUp = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>;
 const IconArrowDown = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>;
 const IconPackage = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>;
-const IconSun = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
-const IconMoon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>;
 const IconLogout = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>;
 const IconLightning = () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
 const IconCloud = () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>;
-// Thêm Icon List
+const IconNote = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>;
+// Icon Copy
+const IconCopy = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>;
 const IconList = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>;
 type Lang = 'vi' | 'en';
 type Theme = 'light' | 'dark';
@@ -74,7 +75,13 @@ export default function Home() {
 
     const [waitingForPeer, setWaitingForPeer] = useState<string | null>(null); // A đang chờ B (lưu ID của B)
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-
+    const [showNoteModal, setShowNoteModal] = useState(false);
+    const [noteContent, setNoteContent] = useState("");
+    const [noteHistory, setNoteHistory] = useState<TextNote[]>([]);
+    const [hasUnread, setHasUnread] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [isCoolingDown, setIsCoolingDown] = useState(false);
     useEffect(() => {
         const handleOffline = () => {
             // Khi mất mạng: Báo lỗi đỏ, rung máy (nếu có thể), chặn thao tác
@@ -137,7 +144,9 @@ export default function Home() {
         incomingQueues, notifyQueueAdd, notifyQueueRemove, rejectIncomingQueue, rejectedQueueId, resetRejectedQueue,
         actualRoomId, checkRoomExists, connectionTypes, cancelOutgoingFile, acceptIncomingRequest,
         acceptedPeerId,
-        setAcceptedPeerId
+        setAcceptedPeerId,
+        receivedNotes,
+        broadcastNote,
     } = useWebRTC(roomId, username);
 
 
@@ -156,6 +165,54 @@ export default function Home() {
 
 
     const text = t[lang];
+
+
+
+    useEffect(() => {
+        if (receivedNotes.length > 0) {
+            const newNotes = receivedNotes.filter(n => !noteHistory.some(h => h.id === n.id));
+
+            if (newNotes.length > 0) {
+                setNoteHistory(prev => [...prev, ...newNotes].sort((a, b) => a.timestamp - b.timestamp));
+
+                if (!showNoteModal) {
+                    setHasUnread(true);
+                } else {
+                    // Nếu đang mở modal thì thử scroll (nếu đang ở đáy)
+                    // Dùng setTimeout nhỏ để DOM kịp render tin nhắn mới trước khi tính toán
+                    setTimeout(() => scrollToBottom(false), 50);
+                }
+            }
+        }
+    }, [receivedNotes, showNoteModal, noteHistory]);
+
+    const scrollToBottom = (force = false) => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+
+        if (force) {
+            container.scrollTop = container.scrollHeight;
+            return;
+        }
+
+
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+
+        if (isNearBottom) {
+            container.scrollTop = container.scrollHeight;
+        }
+    };
+
+    useEffect(() => {
+        if (showNoteModal) {
+            // Chờ UI render xong (đặc biệt trên mobile) rồi mới scroll
+            setTimeout(() => scrollToBottom(true), 100);
+            setHasUnread(false);
+        }
+    }, [showNoteModal]);
+
+
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 
@@ -263,7 +320,27 @@ export default function Home() {
 
     }, [activeTask, downloadProgresses]);
 
+    const handleSendNote = () => {
+        if (!noteContent.trim() || isCoolingDown) return; // Chặn nếu đang cooldown
 
+        // Gửi đi
+        const myNote = broadcastNote(noteContent, "ME");
+        setNoteHistory(prev => [...prev, myNote]);
+        setNoteContent("");
+
+        // Kích hoạt cooldown 1s
+        setIsCoolingDown(true);
+        setTimeout(() => setIsCoolingDown(false), 1000);
+
+        // Gửi xong thì bắt buộc scroll xuống đáy
+        setTimeout(() => scrollToBottom(true), 100);
+    };
+
+    // Hàm copy note
+    const copyToClipboard = (txt: string) => {
+        navigator.clipboard.writeText(txt);
+        toast.success(text.copied);
+    };
     const filterDuplicates = (newFiles: File[], currentFiles: File[]) => {
         const unique = newFiles.filter(nf =>
             !currentFiles.some(cf =>
@@ -714,7 +791,23 @@ export default function Home() {
             </div>
 
             {/* --- FLOATING SETTINGS (Lang Only - Removed Theme Toggle) --- */}
-            <div className="fixed bottom-16 right-4 z-30">
+            <div className="fixed bottom-16 right-4 z-30 flex flex-col gap-3">
+                {/* Nút NOTE */}
+                <button
+                    onClick={() => setShowNoteModal(true)}
+                    className="w-10 h-10 bg-zinc-900 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-yellow-500 hover:text-yellow-500 transition-all shadow-lg"
+                    title={text.notes}
+                >
+                    <IconNote />
+                    {hasUnread && (
+                        <span className="absolute top-0 right-0 flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-zinc-900"></span>
+                        </span>
+                    )}
+                </button>
+
+                {/* Nút LANG (Cũ) */}
                 <button
                     onClick={() => setLang(l => l === 'vi' ? 'en' : 'vi')}
                     className="w-10 h-10 bg-zinc-900 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white font-bold text-xs hover:border-zinc-600 transition-colors"
@@ -723,8 +816,109 @@ export default function Home() {
                 </button>
             </div>
 
-            {/* --- MODALS --- */}
 
+            {showNoteModal && (
+                <div className="fixed inset-0 z-[70] flex flex-col md:items-center md:justify-center md:bg-black/80 md:p-4 bg-zinc-950">
+                    {/* Mobile: w-full h-full (Full screen)
+                       Desktop: max-w-md max-h-[80vh] rounded-2xl (Popup)
+                    */}
+                    <div className="flex flex-col w-full h-[100dvh] md:h-auto md:max-h-[80vh] md:max-w-md bg-zinc-900 md:rounded-2xl border-zinc-800 md:border shadow-2xl overflow-hidden">
+
+                        {/* Header */}
+                        <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-950 shrink-0">
+                            <h3 className="font-bold text-white flex items-center gap-2 text-lg">
+                                <IconNote /> {text.noteTitle}
+                            </h3>
+                            <button
+                                onClick={() => setShowNoteModal(false)}
+                                className="w-8 h-8 flex items-center justify-center bg-zinc-800 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* List Notes - Gắn ref vào đây */}
+                        <div
+                            ref={scrollContainerRef} // 👈 QUAN TRỌNG: Gắn ref vào container này
+                            className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-900/50 scroll-smooth"
+                        >
+                            {noteHistory.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-full text-zinc-600 space-y-2 opacity-50">
+                                    <IconNote />
+                                    <span className="text-sm italic">{text.emptyNote}</span>
+                                </div>
+                            ) : (
+                                noteHistory.map((note) => {
+                                    const isMe = note.senderId === "ME";
+                                    const senderName = isMe ? text.you : (peers.find(p => p.id === note.senderId)?.name || "Unknown");
+
+                                    return (
+                                        <div key={note.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                                            <span className="text-[10px] text-zinc-500 mb-1 px-1 font-bold flex gap-2">
+                                                <span>{senderName}</span>
+                                                <span>{new Date(note.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            </span>
+                                            <div className={`
+                                                max-w-[85%] p-3 rounded-2xl relative group text-sm md:text-base shadow-sm
+                                                ${isMe ? 'bg-zinc-100 text-black rounded-tr-none' : 'bg-zinc-800 text-zinc-200 rounded-tl-none border border-zinc-700'}
+                                            `}>
+                                                <p className="whitespace-pre-wrap break-words leading-relaxed">{note.content}</p>
+
+                                                {/* Copy Button */}
+                                                <button
+                                                    onClick={() => copyToClipboard(note.content)}
+                                                    className={`absolute top-2 ${isMe ? 'left-[-30px]' : 'right-[-30px]'} opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-white transition-opacity p-1`}
+                                                    title={text.copy}
+                                                >
+                                                    <IconCopy />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* Input Area */}
+                        <div className="p-3 border-t border-zinc-800 bg-zinc-950 shrink-0 pb-safe">
+                            <div className="flex gap-2 items-end">
+                                <textarea
+                                    value={noteContent}
+                                    onChange={(e) => setNoteContent(e.target.value.slice(0, 1000))}
+                                    placeholder={text.typeNote}
+                                    // text-base để iOS không zoom khi focus
+                                    className="flex-1 bg-zinc-900 text-white text-base rounded-2xl p-3 border border-zinc-800 focus:border-zinc-600 outline-none resize-none h-12 py-3 max-h-32 min-h-[48px]"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleSendNote();
+                                        }
+                                    }}
+                                />
+                                <button
+                                    onClick={handleSendNote}
+                                    disabled={!noteContent.trim() || isCoolingDown}
+                                    className={`
+                                        h-12 px-5 rounded-xl font-bold text-sm transition-all flex items-center justify-center
+                                        ${!noteContent.trim() || isCoolingDown
+                                            ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                                            : 'bg-white text-black hover:bg-zinc-200 active:scale-95 shadow-lg shadow-white/10'}
+                                    `}
+                                >
+                                    {isCoolingDown ? (
+                                        <div className="w-4 h-4 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin"></div>
+                                    ) : (
+                                        text.send
+                                    )}
+                                </button>
+                            </div>
+                            <div className="text-right text-[10px] text-zinc-600 mt-2 px-1">
+                                {noteContent.length}/1000
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* 1. FILE LIST MODAL */}
             {showFilesModal && (
                 <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">

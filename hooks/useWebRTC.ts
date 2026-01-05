@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import Peer from "simple-peer";
 import { getDeviceId } from "@/utils/nameGenerator";
+import { FileHeader, FileEnd, TextNote } from "@/types/transfer"; 
 
 export interface User {
   id: string;
@@ -60,6 +61,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
   const connStatusRef = useRef<{ [key: string]: PeerConnectionStatus }>({});
   const chunkTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const [acceptedPeerId, setAcceptedPeerId] = useState<string | null>(null);
+  const [receivedNotes, setReceivedNotes] = useState<TextNote[]>([]);
   const updateDisplayStatus = (peerId: string) => {
     const status = connStatusRef.current[peerId];
     if (!status) return;
@@ -115,6 +117,11 @@ export const useWebRTC = (roomId: string, userName: string) => {
         if (msg.type === "cancel") {
           rejectIncomingFile(msg.fileId, fromPeerId, "Người gửi đã hủy");
           return;
+        }
+
+        if (msg.type === "text-note") {
+             setReceivedNotes(prev => [...prev, { ...msg, senderId: fromPeerId }]);
+             return;
         }
         if (msg.type === "conn-update") {
           if (!connStatusRef.current[fromPeerId])
@@ -497,6 +504,30 @@ export const useWebRTC = (roomId: string, userName: string) => {
     []
   );
 
+
+  const broadcastNote = (content: string, myId: string) => {
+    const note: TextNote = {
+      type: 'text-note',
+      id: Math.random().toString(36).substr(2, 9),
+      senderId: myId, 
+      content,
+      timestamp: Date.now(),
+    };
+
+    const msgString = JSON.stringify(note);
+
+
+    Object.values(peersRef.current).forEach(peer => {
+      try {
+        peer.send(msgString);
+      } catch (e) {
+        console.error("Failed to send note", e);
+      }
+    });
+
+    return note;
+  };
+
   return {
     peers,
     cancelOutgoingFile,
@@ -516,5 +547,8 @@ export const useWebRTC = (roomId: string, userName: string) => {
     acceptIncomingRequest,
     acceptedPeerId,
     setAcceptedPeerId,
+    receivedNotes, // Export state này
+    broadcastNote, // Export hàm này
+    setReceivedNotes
   };
 };
