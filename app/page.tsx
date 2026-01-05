@@ -149,7 +149,7 @@ export default function Home() {
         broadcastNote,
     } = useWebRTC(roomId, username);
 
-
+    const displayRoomId = roomId === "AUTO_DETECT" ? actualRoomId : roomId;
 
     const requestWakeLock = async () => {
         try {
@@ -435,7 +435,7 @@ export default function Home() {
 
 
 
-    const getShareLink = () => typeof window !== 'undefined' ? `${window.location.origin}?room=${actualRoomId}` : '';
+    const getShareLink = () => typeof window !== 'undefined' ? `${window.location.origin}?room=${displayRoomId}` : '';
 
     // --- DRAG & DROP ---
     const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
@@ -827,7 +827,7 @@ export default function Home() {
                         {/* Header */}
                         <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-950 shrink-0">
                             <h3 className="font-bold text-white flex items-center gap-2 text-lg">
-                                <IconNote /> {text.noteTitle}
+                             {text.noteTitle}
                             </h3>
                             <button
                                 onClick={() => setShowNoteModal(false)}
@@ -853,25 +853,48 @@ export default function Home() {
                                     const senderName = isMe ? text.you : (peers.find(p => p.id === note.senderId)?.name || "Unknown");
 
                                     return (
-                                        <div key={note.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                                        <div key={note.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300 group/message`}>
+                                            {/* Sender Info */}
                                             <span className="text-[10px] text-zinc-500 mb-1 px-1 font-bold flex gap-2">
                                                 <span>{senderName}</span>
                                                 <span>{new Date(note.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </span>
-                                            <div className={`
-                                                max-w-[85%] p-3 rounded-2xl relative group text-sm md:text-base shadow-sm
-                                                ${isMe ? 'bg-zinc-100 text-black rounded-tr-none' : 'bg-zinc-800 text-zinc-200 rounded-tl-none border border-zinc-700'}
-                                            `}>
-                                                <p className="whitespace-pre-wrap break-words leading-relaxed">{note.content}</p>
 
-                                                {/* Copy Button */}
+                                            {/* Message Bubble Container */}
+                                            <div className="relative max-w-[85%]">
+
+                                                {/* 1. Nút Copy (Đã tối ưu) */}
                                                 <button
                                                     onClick={() => copyToClipboard(note.content)}
-                                                    className={`absolute top-2 ${isMe ? 'left-[-30px]' : 'right-[-30px]'} opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-white transition-opacity p-1`}
+                                                    className={`
+                        absolute top-2 w-8 h-8 flex items-center justify-center rounded-full transition-all z-10
+                        ${isMe
+                                                            ? 'left-[-40px] text-zinc-500 hover:bg-zinc-800' // Tin mình -> Nút bên trái
+                                                            : 'right-[-40px] text-zinc-500 hover:bg-zinc-800' // Tin bạn -> Nút bên phải
+                                                        }
+                        
+                        /* UX Logic: 
+                           - Mobile: Luôn hiện (opacity-40) để biết là có nút, bấm vào thì sáng lên
+                           - Desktop (md): Ẩn đi (opacity-0), hover vào tin nhắn mới hiện (opacity-100)
+                        */
+                        opacity-40 active:opacity-100 md:opacity-0 md:group-hover/message:opacity-100
+                        active:scale-90 hover:text-white
+                    `}
                                                     title={text.copy}
                                                 >
                                                     <IconCopy />
                                                 </button>
+
+                                                {/* 2. Nội dung tin nhắn */}
+                                                <div className={`
+                    p-3 rounded-2xl text-sm md:text-base shadow-sm break-words whitespace-pre-wrap leading-relaxed
+                    ${isMe
+                                                        ? 'bg-zinc-100 text-black rounded-tr-none'
+                                                        : 'bg-zinc-800 text-zinc-200 rounded-tl-none border border-zinc-700'
+                                                    }
+                `}>
+                                                    {note.content}
+                                                </div>
                                             </div>
                                         </div>
                                     );
@@ -1040,12 +1063,17 @@ export default function Home() {
                 <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
                     <div className="bg-zinc-900 p-8 rounded-2xl w-full max-w-xs border border-zinc-800 flex flex-col items-center text-center">
                         <h2 className="font-bold text-lg mb-4 text-white">{text.scanQr}</h2>
+
+                        {/* QRCode giữ nguyên hàm getShareLink() vì mình đã sửa hàm đó ở trên rồi */}
                         <div className="bg-white p-2 rounded-xl mb-6">
                             <QRCodeSVG value={getShareLink()} size={160} />
                         </div>
+
+                        {/* 🔥 SỬA CHỖ NÀY: Thay actualRoomId bằng displayRoomId */}
                         <div className="font-black text-2xl mb-6 text-white tracking-widest bg-zinc-950 px-6 py-2 rounded-lg border border-zinc-800">
-                            {actualRoomId}
+                            {displayRoomId}
                         </div>
+
                         <button
                             onClick={() => { navigator.clipboard.writeText(getShareLink()); setShowShareModal(false); }}
                             className="w-full bg-zinc-800 text-white py-3 rounded-xl font-bold hover:bg-zinc-700 border border-zinc-700"
