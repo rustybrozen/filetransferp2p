@@ -368,7 +368,7 @@ export default function Home() {
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
-        
+
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const droppedFiles = Array.from(e.dataTransfer.files);
             const uniqueFiles = filterDuplicates(droppedFiles, selectedFiles);
@@ -594,7 +594,11 @@ export default function Home() {
                                 ? receivingFile?.percentage || 0
                                 : 0;
 
-                        // UI Logic: Simplified Colors to Grayscale/White
+                        // Tính radius để vẽ line cho khớp với vị trí bong bóng
+                        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+                        const radius = isMobile ? 120 : 220; // Phải khớp với số trong hàm getPosition
+
+                        // UI Logic: Grayscale/Zinc Theme
                         let ringClass = "border-zinc-800";
                         let StatusIcon = IconSmartphone;
                         let statusColor = "text-zinc-500";
@@ -602,7 +606,7 @@ export default function Home() {
 
                         if (isBusy) {
                             cursorClass = "cursor-wait";
-                            ringClass = "border-zinc-600 border-dashed"; // Busy state
+                            ringClass = "border-zinc-600 border-dashed";
                         } else if (!hasFiles && !incoming) {
                             cursorClass = "cursor-not-allowed opacity-50";
                         }
@@ -614,75 +618,88 @@ export default function Home() {
                             StatusIcon = IconArrowDown;
                             statusColor = "text-white";
                         } else if (incoming) {
-                            ringClass = "border-white border-double"; // Incoming request
+                            ringClass = "border-white border-double";
                             StatusIcon = IconPackage;
                             statusColor = "text-white";
                         }
 
                         return (
-                            <div
-                                key={peer.id}
-                                className="absolute flex flex-col items-center justify-center transition-all duration-500"
-                                style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
-                            >
+                            <div key={peer.id} className="absolute inset-0 pointer-events-none">
 
-
-                                {/* Peer Node Bubble */}
+                                {/* 1. CONNECTION LINE (Vẽ từ tâm màn hình ra) */}
                                 <div
-                                    className={`
+                                    className="absolute top-1/2 left-1/2 h-[1px] bg-gradient-to-l from-zinc-700 to-transparent -z-10 origin-left"
+                                    style={{
+                                        width: `${radius}px`, // Dài bằng bán kính
+                                        transform: `rotate(${(index / peers.length) * 360 - 90}deg)`, // Chỉ xoay góc
+                                    }}
+                                ></div>
+
+                                {/* 2. PEER NODE (Dịch chuyển đến vị trí vệ tinh) */}
+                                <div
+                                    className="absolute top-1/2 left-1/2 flex flex-col items-center justify-center transition-all duration-500 pointer-events-auto"
+                                    style={{
+                                        // Dịch chuyển X, Y rồi lùi lại 50% để tâm bong bóng trùng khớp điểm nối line
+                                        transform: `translate(${pos.x}px, ${pos.y}px) translate(-50%, -50%)`
+                                    }}
+                                >
+                                    {/* Peer Node Bubble (Giữ nguyên code UI của ông) */}
+                                    <div
+                                        className={`
                                         w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center border-2 relative z-10 transition-all
                                         ${ringClass} ${cursorClass} hover:bg-zinc-800
                                     `}
-                                    onClick={() => {
-                                        if (isBusy || incoming) return;
-                                        if (hasFiles) handleSendRequest(peer.id);
-                                    }}
-                                >
-                                    {incoming && (
-                                        <div className="absolute -top-3 bg-white text-black text-[9px] font-bold px-2 py-0.5 rounded-full z-20 border border-zinc-200">
-                                            {text.incoming}
+                                        onClick={() => {
+                                            if (isBusy || incoming) return;
+                                            if (hasFiles) handleSendRequest(peer.id);
+                                        }}
+                                    >
+                                        {incoming && (
+                                            <div className="absolute -top-3 bg-white text-black text-[9px] font-bold px-2 py-0.5 rounded-full z-20 border border-zinc-200">
+                                                {text.incoming}
+                                            </div>
+                                        )}
+
+                                        <div className="flex flex-col items-center p-1">
+                                            {(isSending || isReceiving) ? (
+                                                <div className={`text-sm font-bold ${statusColor} flex flex-col items-center leading-tight`}>
+                                                    <span>{currentPercent}%</span>
+                                                </div>
+                                            ) : (
+                                                <div className={`mb-1 ${statusColor}`}><StatusIcon /></div>
+                                            )}
+
+                                            <span className="text-[9px] font-bold truncate max-w-[60px] text-zinc-400">
+                                                {peer.name}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Connection Type Label */}
+                                    {connType && !incoming && connType === 'p2p' && (
+                                        <div className="absolute -bottom-4 bg-zinc-950 border border-zinc-800 text-zinc-500 px-2 py-0.5 rounded text-[8px] font-bold uppercase">
+                                            FAST
                                         </div>
                                     )}
 
-                                    <div className="flex flex-col items-center p-1">
-                                        {(isSending || isReceiving) ? (
-                                            <div className={`text-sm font-bold ${statusColor} flex flex-col items-center leading-tight`}>
-                                                <span>{currentPercent}%</span>
-                                            </div>
-                                        ) : (
-                                            <div className={`mb-1 ${statusColor}`}><StatusIcon /></div>
-                                        )}
-
-                                        <span className="text-[9px] font-bold truncate max-w-[60px] text-zinc-400">
-                                            {peer.name}
-                                        </span>
-                                    </div>
+                                    {/* Action Buttons for Incoming */}
+                                    {incoming && !isReceiving && (
+                                        <div className="absolute top-full mt-2 flex gap-2 z-20">
+                                            <button
+                                                onClick={() => handleSendRequest(peer.id)} // Chỗ này ông đang gọi handleSendRequest, coi chừng nhầm với acceptIncomingRequest nhé
+                                                className="bg-white hover:bg-zinc-200 text-black text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm"
+                                            >
+                                                {text.receive}
+                                            </button>
+                                            <button
+                                                onClick={() => rejectIncomingQueue(incoming.peerId)}
+                                                className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white text-[10px] font-bold px-2 py-1.5 rounded-full"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* Connection Type Label */}
-                                {connType && !incoming && connType === 'p2p' && (
-                                    <div className="absolute -bottom-4 bg-zinc-950 border border-zinc-800 text-zinc-500 px-2 py-0.5 rounded text-[8px] font-bold uppercase">
-                                        FAST
-                                    </div>
-                                )}
-
-                                {/* Action Buttons for Incoming */}
-                                {incoming && !isReceiving && (
-                                    <div className="absolute top-full mt-2 flex gap-2 z-20">
-                                        <button
-                                            onClick={() => handleSendRequest(peer.id)}
-                                            className="bg-white hover:bg-zinc-200 text-black text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm"
-                                        >
-                                            {text.receive}
-                                        </button>
-                                        <button
-                                            onClick={() => rejectIncomingQueue(incoming.peerId)}
-                                            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white text-[10px] font-bold px-2 py-1.5 rounded-full"
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                )}
                             </div>
                         );
                     })
