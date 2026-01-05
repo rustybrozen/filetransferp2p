@@ -3,8 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-"dev": "nodemon --exec tsx server.ts",
-
+    "dev": "nodemon --exec tsx server.ts",
     "build": "next build && tsc server.ts --module CommonJS --moduleResolution node --target es2019 --outDir dist --esModuleInterop --skipLibCheck",
     "start": "NODE_ENV=production node dist/server.js",
     "lint": "next lint"
@@ -14,6 +13,7 @@
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-hot-toast": "^2.6.0",
     "simple-peer": "^9.11.1",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",

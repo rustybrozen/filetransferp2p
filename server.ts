@@ -20,7 +20,7 @@ export interface SignalData {
 // --- CONFIG NEXT.JS ---
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "localhost";
-const port = parseInt(process.env.PORT || "3000", 10);
+const port = parseInt(process.env.PORT || "3010", 10);
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -117,6 +117,14 @@ app.prepare().then(() => {
       io.to(to).emit("queue-reject", { from: socket.id });
     });
 
+    socket.on("transfer-accept", ({ to }: { to: string }) => {
+      io.to(to).emit("transfer-accept", { from: socket.id });
+    });
+
+
+    socket.on("transfer-cancel", ({ to, fileId }: { to: string; fileId: string }) => {
+        io.to(to).emit("transfer-cancel", { from: socket.id, fileId });
+    });
     // 4. Check Room
     socket.on("check-room-availability", (roomId: string, callback: (exists: boolean) => void) => {
         const room = io.sockets.adapter.rooms.get(roomId);
