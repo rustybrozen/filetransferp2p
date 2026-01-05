@@ -16,7 +16,6 @@ const IconSmartphone = () => <svg className="w-6 h-6" fill="none" stroke="curren
 const IconArrowUp = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>;
 const IconArrowDown = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>;
 const IconPackage = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>;
-const IconDice = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const IconSun = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
 const IconMoon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>;
 const IconLogout = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>;
@@ -127,13 +126,13 @@ export default function Home() {
             // Tìm tên peer
             const peerName = peers.find(p => p.id === acceptedPeerId)?.name || "Unknown";
 
-            // BẮT ĐẦU GỬI THẬT
+
             startTransfer(acceptedPeerId, peerName, pendingFiles);
 
-            // Reset trạng thái chờ
+
             setWaitingForPeer(null);
-            setAcceptedPeerId(null); // Reset signal
-            // Có thể clear selectedFiles ở đây nếu muốn
+            setAcceptedPeerId(null);
+
         }
     }, [acceptedPeerId, waitingForPeer, pendingFiles, peers, setAcceptedPeerId]);
 
@@ -141,10 +140,10 @@ export default function Home() {
     useEffect(() => {
         if (rejectedQueueId) {
             if (waitingForPeer === rejectedQueueId) {
-                // Nếu đang chờ thằng này mà nó từ chối -> Tắt waiting
+
                 setWaitingForPeer(null);
                 setPendingFiles([]);
-                toast.error(text.rejected); // Hoặc dùng Toast đẹp hơn
+                toast.error(text.rejected);
             }
             resetRejectedQueue();
         }
@@ -162,7 +161,7 @@ export default function Home() {
                 setIsCheckingLink(false);
                 if (exists) {
                     setRoomId(roomParam);
-                    // Xóa param trên URL cho đẹp
+
                     window.history.replaceState({}, '', '/');
                 } else {
                     setJoinError(`${text.notFound} ${roomParam}`);
@@ -171,14 +170,14 @@ export default function Home() {
         }
     }, [isMounted, checkRoomExists, text]);
 
-    // --- LOGIC: AUTO FILL CODE ---
+
     useEffect(() => {
         if (showManualModal && !manualInput) {
             setManualInput(generateIdentity());
         }
     }, [showManualModal, manualInput]);
 
-    // --- LOGIC: CHECK LINK ---
+
     const hasCheckedLink = useRef(false);
     useEffect(() => {
         if (!isMounted || hasCheckedLink.current) return;
@@ -199,7 +198,7 @@ export default function Home() {
         }
     }, [isMounted, checkRoomExists, text]);
 
-    // --- QUEUE HANDLERS ---
+
     useEffect(() => {
         if (rejectedQueueId) {
             setQueue(prev => prev.filter(q => q.targetId !== rejectedQueueId));
@@ -246,18 +245,13 @@ export default function Home() {
         // setSelectedFiles([]); // Tùy ông muốn clear hay không
     };
 
-    // 👇 HÀM MỚI: KHI BẤM VÀO BONG BÓNG USER
+
     const handleSendRequest = (targetId: string) => {
         if (selectedFiles.length === 0) return;
 
-        // 1. Lưu tạm file và trạng thái chờ
+
         setPendingFiles(selectedFiles);
         setWaitingForPeer(targetId);
-
-        // 2. Gửi tín hiệu "Xin phép" (notifyQueueAdd)
-        // Lưu ý: notifyQueueAdd cần FileList, ta convert tạm hoặc sửa notifyQueueAdd nhận array
-        // Hack nhanh: Tạo object giả FileList hoặc sửa notifyQueueAdd ở useWebRTC.ts (dễ nhất là sửa hook nhận array)
-        // Nhưng ở đây ta cứ truyền metadata thôi
         const dt = new DataTransfer();
         selectedFiles.forEach(f => dt.items.add(f));
         notifyQueueAdd(targetId, dt.files);
@@ -279,12 +273,7 @@ export default function Home() {
         return { isSending, isReceiving, incoming };
     };
 
-    const switchToManual = () => {
-        if (manualInput.trim()) {
-            setRoomId(manualInput.toUpperCase());
-            setShowManualModal(false);
-        }
-    };
+
 
     const getShareLink = () => typeof window !== 'undefined' ? `${window.location.origin}?room=${actualRoomId}` : '';
 
@@ -298,11 +287,8 @@ export default function Home() {
         setIsDragging(false);
 
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            // 👇 SỬA ĐOẠN NÀY:
-            // 1. Dùng Array.from để chuyển FileList -> Array
             const droppedFiles = Array.from(e.dataTransfer.files);
 
-            // 2. Nối vào danh sách cũ (để không bị mất file đã chọn trước đó)
             setSelectedFiles(prev => [...prev, ...droppedFiles]);
         }
     };
@@ -364,33 +350,30 @@ export default function Home() {
             setRoomId(code);
             setShowJoinInput(false);
         } else {
-            toast.error(text.roomNotExists); // Hoặc làm UI báo lỗi đẹp hơn
+            toast.error(text.roomNotExists);
         }
     };
 
 
-    const handleDisconnect = () => {
-        setRoomId("");
-    };
 
 
 
 
 
-  
 
-    // --- ERROR SCREEN ---
-    if (isCheckingLink || joinError) {
+
+
+// --- MÀN HÌNH ERROR / CHECKING ---
+if (isCheckingLink || joinError) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-zinc-950 text-gray-800 dark:text-gray-100 font-sans transition-colors">
-                <div className="bg-white dark:bg-zinc-900 rounded-3xl p-8 text-center shadow-xl max-w-sm w-full mx-4">
-
+            <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-950 text-zinc-200 font-sans">
+                <div className="bg-zinc-900 rounded-2xl p-8 text-center border border-zinc-800 max-w-sm w-full mx-4">
                     <div className="font-bold text-lg mb-2">{isCheckingLink ? text.connecting : text.error}</div>
-                    {joinError && <div className="text-red-500 mb-6 text-sm bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">{joinError}</div>}
+                    {joinError && <div className="text-red-400 mb-6 text-sm bg-red-900/10 p-2 rounded border border-red-900/20">{joinError}</div>}
                     {!isCheckingLink && (
                         <button
                             onClick={() => { setJoinError(null); setRoomId("AUTO_DETECT"); }}
-                            className="bg-black dark:bg-white text-white dark:text-black rounded-xl px-6 py-3 font-bold w-full hover:opacity-80 transition"
+                            className="bg-white text-black rounded-xl px-6 py-3 font-bold w-full hover:bg-zinc-200 transition-colors"
                         >
                             {text.home}
                         </button>
@@ -400,19 +383,17 @@ export default function Home() {
         );
     }
 
-
     return (
         <div
-            className="min-h-screen bg-gray-50 dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 font-sans flex flex-col overflow-hidden relative selection:bg-gray-100 transition-colors duration-300"
+            className="min-h-screen bg-zinc-950 text-zinc-200 font-sans flex flex-col overflow-hidden relative selection:bg-zinc-700"
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-
-
+            {/* DRAG OVERLAY */}
             {isDragging && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-100 flex items-center justify-center pointer-events-none transition-opacity duration-300">
-                    <div className="text-white text-2xl md:text-4xl font-bold animate-bounce tracking-widest border-4 border-white border-dashed p-10 rounded-3xl flex flex-col items-center gap-4">
+                <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center pointer-events-none">
+                    <div className="text-white text-2xl font-bold border-2 border-white border-dashed p-10 rounded-2xl flex flex-col items-center gap-4">
                         <IconArrowDown />
                         {text.dropHere}
                     </div>
@@ -423,49 +404,42 @@ export default function Home() {
             <div className="absolute top-0 left-0 right-0 z-30 p-4 flex justify-between items-start pointer-events-none">
                 {/* Room Info */}
                 <div className="pointer-events-auto flex items-start gap-2">
-
                     <button
                         onClick={() => setShowModeModal(true)}
-                        className="w-10 h-10 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-full shadow-sm border border-gray-100 dark:border-zinc-800 flex items-center justify-center text-gray-500 hover:text-black dark:hover:text-white hover:scale-105 transition-all"
-                        title="Tùy chọn kết nối"
+                        className="w-10 h-10 bg-zinc-900 border border-zinc-800 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-600 transition-all"
+                        title="Menu"
                     >
-                        {/* Icon Menu / Settings */}
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>
                     </button>
 
                     <div>
-                        {/* Trạng thái phòng */}
-                        <div className="flex items-center gap-2 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-gray-100 dark:border-zinc-800">
-                            <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_10px] ${roomId === 'AUTO_DETECT' ? 'bg-green-500 shadow-green-500' : 'bg-purple-500 shadow-purple-500'}`}></div>
-                            <span className="font-bold text-sm text-gray-700 dark:text-gray-200 tracking-widest">
+                        <div className="flex items-center gap-2 bg-zinc-900 px-4 py-2 rounded-full border border-zinc-800">
+                            <div className={`w-2 h-2 rounded-full ${roomId === 'AUTO_DETECT' ? 'bg-emerald-500' : 'bg-purple-500'}`}></div>
+                            <span className="font-bold text-sm text-zinc-300 tracking-wider">
                                 {roomId === "AUTO_DETECT" ? text.lanMode : roomId}
                             </span>
                         </div>
 
-
                         <div className="mt-2 ml-2 flex flex-col gap-1">
-                            <span className="text-xs text-gray-400 dark:text-gray-500 font-bold tracking-wide">
+                            <span className="text-xs text-zinc-500 font-bold uppercase tracking-wide">
                                 {username}
                             </span>
-
                             {roomId !== "AUTO_DETECT" && (
                                 <button
                                     onClick={() => setShowShareModal(true)}
-                                    className="flex items-center gap-1 text-xs text-blue-500 dark:text-blue-400 font-bold hover:underline text-left"
+                                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white font-bold hover:underline"
                                 >
                                     <IconQr /> {text.showQr}
                                 </button>
                             )}
                         </div>
-
                     </div>
                 </div>
 
                 {/* File Button */}
                 <div className="relative pointer-events-auto flex flex-col items-end gap-2">
-                    {/* Nút Chọn File */}
                     <div className="relative group">
-                        <button className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold shadow-lg transition-all transform duration-200 ${selectedFiles.length > 0 ? 'bg-gray-800 text-white scale-105 ring-4 ring-blue-200 dark:ring-blue-900' : 'bg-white dark:bg-zinc-800 text-gray-800 dark:text-white hover:bg-gray-50 dark:hover:bg-zinc-700'}`}>
+                        <button className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold border transition-all ${selectedFiles.length > 0 ? 'bg-zinc-100 text-black border-zinc-100' : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-600'}`}>
                             <IconFile />
                             <span>{selectedFiles.length > 0 ? `${selectedFiles.length} ${text.files}` : text.selectFile}</span>
                         </button>
@@ -475,11 +449,8 @@ export default function Home() {
                             multiple
                             onChange={e => {
                                 if (e.target.files && e.target.files.length > 0) {
-                                    // Convert FileList sang Array và nối vào danh sách cũ
                                     const newFiles = Array.from(e.target.files);
                                     setSelectedFiles(prev => [...prev, ...newFiles]);
-
-                                    // Reset value để chọn lại được chính file đó nếu muốn
                                     e.target.value = '';
                                 }
                             }}
@@ -487,53 +458,37 @@ export default function Home() {
                         />
                     </div>
 
-                    {/* File Button */}
-                    <div className="relative pointer-events-auto flex items-center gap-2">
-
-                        {/* 👇 NÚT XEM DANH SÁCH (Chỉ hiện khi có file) */}
-                        {selectedFiles.length > 0 && (
-                            <button
-                                onClick={() => setShowFilesModal(true)}
-                                className="w-12 h-12 flex items-center justify-center bg-white dark:bg-zinc-800 rounded-full shadow-lg border border-gray-100 dark:border-zinc-700 text-blue-600 dark:text-blue-400 hover:scale-105 transition-transform relative"
-                            >
-                                <IconList />
-                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full shadow-sm">
-                                    {selectedFiles.length}
-                                </span>
-                            </button>
-                        )}
-
-
-
-                        {/* ❌ ĐÃ XÓA CÁI LIST CŨ Ở ĐÂY ĐỂ CHO VÀO MODAL */}
-                    </div>
+                    {selectedFiles.length > 0 && (
+                        <button
+                            onClick={() => setShowFilesModal(true)}
+                            className="w-10 h-10 flex items-center justify-center bg-zinc-900 rounded-full border border-zinc-800 text-zinc-400 hover:text-white transition-colors relative"
+                        >
+                            <IconList />
+                        </button>
+                    )}
                 </div>
-
-
             </div>
 
             {/* --- MAP VISUALIZATION (CENTER) --- */}
-            <div className="flex-1 flex items-center justify-center relative overflow-visible mt-16 md:mt-0">
-
-                {/* Decorative Rings */}
-                <div className="absolute w-75 h-75 md:w-150 md:h-150 border border-gray-200 dark:border-zinc-800 rounded-full opacity-40 pointer-events-none"></div>
-                <div className="absolute w-45 h-45 md:w-87.5 md:h-87.5 border border-gray-200 dark:border-zinc-800 rounded-full opacity-60 pointer-events-none"></div>
+            <div className="flex-1 flex items-center justify-center relative mt-16 md:mt-0">
+                
+                {/* Cleaned up decorative rings (Deleted) */}
 
                 {/* YOU (Center Node) */}
-                <div className="relative z-20 w-20 h-20 md:w-28 md:h-28 bg-white dark:bg-zinc-800 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] flex items-center justify-center border-4 border-gray-50 dark:border-zinc-700 transform hover:scale-105 transition-transform duration-300">
-                    <div className="flex flex-col items-center text-gray-700 dark:text-gray-200">
+                <div className="relative z-20 w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center border-4 border-zinc-800 shadow-lg">
+                    <div className="flex flex-col items-center text-zinc-400">
                         <IconUser />
-                        <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wider">{text.you}</span>
+                        <span className="text-[10px] font-bold mt-1 uppercase tracking-widest text-zinc-600">{text.you}</span>
                     </div>
                 </div>
 
                 {/* PEERS (Satellites) */}
                 {peers.length === 0 ? (
-                    <div className="absolute top-[65%] md:top-[60%] text-center px-6 animate-pulse pointer-events-none">
-                        <div className="text-gray-400 dark:text-zinc-500 text-sm font-medium mb-1">
+                    <div className="absolute top-[65%] text-center px-6 pointer-events-none">
+                        <div className="text-zinc-500 text-sm font-medium mb-1 animate-pulse">
                             {roomId === "AUTO_DETECT" ? text.scanning : text.waiting}
                         </div>
-                        <div className="text-gray-300 dark:text-zinc-600 text-xs">
+                        <div className="text-zinc-700 text-xs">
                             {text.openOther}
                         </div>
                     </div>
@@ -544,56 +499,48 @@ export default function Home() {
                         const connType = connectionTypes[peer.id];
                         const hasFiles = selectedFiles.length > 0;
                         const isBusy = isSending || isReceiving;
-                        const isDuplex = isSending && isReceiving;
-
                         const receivingFile = Object.values(downloadProgresses).find(p => p.peerId === peer.id);
 
                         const currentPercent = isSending
                             ? uploadProgress?.pct || 0
                             : isReceiving
-                                ? receivingFile?.percentage || 0 // 👇 Lấy % từ file tìm được
+                                ? receivingFile?.percentage || 0
                                 : 0;
-                        // Dynamic Styles based on Status
-                        let ringClass = "border-gray-100 dark:border-zinc-700";
-                        let scaleClass = "scale-100";
+
+                        // UI Logic: Simplified Colors to Grayscale/White
+                        let ringClass = "border-zinc-800";
                         let StatusIcon = IconSmartphone;
-                        let statusColor = "text-gray-500 dark:text-gray-400";
+                        let statusColor = "text-zinc-500";
                         let cursorClass = "cursor-pointer";
-                        if (isBusy) cursorClass = "cursor-wait";
-                        else if (!hasFiles && !incoming) cursorClass = "cursor-not-allowed";
-                        if (isDuplex) {
-                            ringClass = "border-purple-500 border-double animate-pulse"; // Màu tím mộng mơ
-                            StatusIcon = IconLightning; // Icon sấm sét cho ngầu
-                            statusColor = "text-purple-500";
+
+                        if (isBusy) {
+                            cursorClass = "cursor-wait";
+                            ringClass = "border-zinc-600 border-dashed"; // Busy state
+                        } else if (!hasFiles && !incoming) {
+                            cursorClass = "cursor-not-allowed opacity-50";
                         }
+
                         if (isSending) {
-                            // 👇 Đã xóa 'animate-spin'
-                            ringClass = "border-green-500 border-dashed";
                             StatusIcon = IconArrowUp;
-                            statusColor = "text-green-500";
-                        }
-                        else if (isReceiving) {
-                            // 👇 Đã xóa 'animate-spin'
-                            ringClass = "border-blue-500 border-dashed";
+                            statusColor = "text-white";
+                        } else if (isReceiving) {
                             StatusIcon = IconArrowDown;
-                            statusColor = "text-blue-500";
-                        }
-                        else if (incoming) {
-                            // Cái này rung rung (pulse) để báo hiệu thì giữ lại ok, hoặc xóa animate-pulse nếu muốn
-                            ringClass = "border-orange-500 border-4 animate-pulse";
-                            scaleClass = "scale-110";
+                            statusColor = "text-white";
+                        } else if (incoming) {
+                            ringClass = "border-white border-double"; // Incoming request
                             StatusIcon = IconPackage;
-                            statusColor = "text-orange-500";
+                            statusColor = "text-white";
                         }
+
                         return (
                             <div
                                 key={peer.id}
-                                className={`absolute flex flex-col items-center justify-center transition-all duration-700 ease-out ${scaleClass}`}
+                                className="absolute flex flex-col items-center justify-center transition-all duration-500"
                                 style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
                             >
-                                {/* Connection Line */}
+                                {/* Connection Line - Simple gray line */}
                                 <div
-                                    className="absolute top-1/2 left-1/2 w-[120px] md:w-[220px] h-[1px] bg-gradient-to-l from-gray-300 dark:from-zinc-700 to-transparent -z-10 origin-left"
+                                    className="absolute top-1/2 left-1/2 w-[120px] md:w-[220px] h-[1px] bg-zinc-800 -z-10 origin-left"
                                     style={{
                                         transform: `rotate(${(index / peers.length) * 360 - 90}deg) translate(-50%, -50%)`,
                                     }}
@@ -602,92 +549,59 @@ export default function Home() {
                                 {/* Peer Node Bubble */}
                                 <div
                                     className={`
-                w-16 h-16 md:w-24 md:h-24 bg-white dark:bg-zinc-800 rounded-full shadow-lg flex items-center justify-center border-4 relative z-10 transition-all
-                ${ringClass} 
-                
-                ${/* 👇 LOGIC MỚI: Nếu không phải đang nhận file VÀ không có file để gửi -> Disable */ ''}
-                ${!incoming && !hasFiles && !isReceiving && !isSending
-                                            ? 'opacity-40 grayscale cursor-not-allowed' // Mờ đi
-                                            : 'cursor-pointer hover:scale-110 hover:shadow-xl group' // Sáng lên
-                                        }
-            `}
-                                    // 👇 Chỉ cho click khi có file hoặc đang có request đến
+                                        w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center border-2 relative z-10 transition-all
+                                        ${ringClass} ${cursorClass} hover:bg-zinc-800
+                                    `}
                                     onClick={() => {
-                                        if (isBusy) return; // ⛔ ĐANG GỬI THÌ CẤM BẤM
-                                        if (incoming) return; // Đang có request đến thì xử lý bằng nút bên dưới
+                                        if (isBusy || incoming) return;
                                         if (hasFiles) handleSendRequest(peer.id);
                                     }}
                                 >
                                     {incoming && (
-                                        <div className="absolute -top-3 bg-orange-500 text-white text-[9px] md:text-[10px] font-bold px-2 py-1 rounded-full z-20 shadow-md animate-bounce whitespace-nowrap">
+                                        <div className="absolute -top-3 bg-white text-black text-[9px] font-bold px-2 py-0.5 rounded-full z-20 border border-zinc-200">
                                             {text.incoming}
                                         </div>
                                     )}
 
-                                    <div className="flex flex-col items-center p-1 text-gray-700 dark:text-gray-200">
-                                        {/* Nếu đang gửi hoặc nhận thì hiện số %, còn không thì hiện Icon như cũ */}
+                                    <div className="flex flex-col items-center p-1">
                                         {(isSending || isReceiving) ? (
-                                            <div className={`text-sm md:text-lg font-black ${statusColor} flex flex-col items-center leading-tight animate-pulse`}>
-                                                {/* 👇 Nếu Duplex thì hiện 2 dòng % */}
-                                                {isDuplex ? (
-                                                    <>
-                                                        <span className="text-[10px] text-green-500">⬆ {uploadProgress?.pct}%</span>
-                                                        <span className="text-[10px] text-blue-500">⬇ {receivingFile?.percentage}%</span>
-                                                    </>
-                                                ) : (
-                                                    <span>{currentPercent}%</span>
-                                                )}
+                                            <div className={`text-sm font-bold ${statusColor} flex flex-col items-center leading-tight`}>
+                                                 <span>{currentPercent}%</span>
                                             </div>
                                         ) : (
-                                            <div className="mb-1"><StatusIcon /></div>
+                                            <div className={`mb-1 ${statusColor}`}><StatusIcon /></div>
                                         )}
 
-                                        {/* Tên User */}
-                                        <span className={`text-[8px] md:text-[10px] font-bold truncate max-w-[50px] md:max-w-[70px] ${statusColor}`}>
+                                        <span className="text-[9px] font-bold truncate max-w-[60px] text-zinc-400">
                                             {peer.name}
                                         </span>
                                     </div>
-
-                                    {!incoming && (
-                                        <div className="absolute opacity-0 group-hover:opacity-100 -bottom-8 bg-black dark:bg-white text-white dark:text-black text-[10px] px-2 py-1 rounded transition-opacity whitespace-nowrap pointer-events-none z-50">
-                                            {hasFiles ? text.clickToSend : "Chọn file trước!"}
-                                        </div>
-                                    )}
                                 </div>
-
-                                {connType && !incoming && (
-                                    <div className={`absolute -bottom-3 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm border ${connType === 'p2p'
-                                        ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/50 dark:text-green-400'
-                                        : 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/50 dark:text-purple-400'
-                                        }`}>
-                                        {connType === 'p2p' ? <IconLightning /> : <IconCloud />}
-                                        <span>{connType === 'p2p' ? 'Nhanh' : 'Chậm'}</span>
+                                
+                                {/* Connection Type Label */}
+                                {connType && !incoming && connType === 'p2p' &&  (
+                                    <div className="absolute -bottom-4 bg-zinc-950 border border-zinc-800 text-zinc-500 px-2 py-0.5 rounded text-[8px] font-bold uppercase">
+                                        FAST
                                     </div>
                                 )}
 
-                                {/* Actions */}
-
-
-
+                                {/* Action Buttons for Incoming */}
                                 {incoming && !isReceiving && (
-                                    <div className="absolute top-full mt-3 flex gap-2 z-20 animate-in fade-in slide-in-from-top-2">
+                                    <div className="absolute top-full mt-2 flex gap-2 z-20">
                                         <button
                                             onClick={() => handleSendRequest(peer.id)}
-                                            className="bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-md transition-colors"
+                                            className="bg-white hover:bg-zinc-200 text-black text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm"
                                         >
                                             {text.receive}
                                         </button>
                                         <button
-
                                             onClick={() => rejectIncomingQueue(incoming.peerId)}
-                                            className="bg-white dark:bg-zinc-800 hover:bg-red-50 dark:hover:bg-zinc-700 text-gray-400 hover:text-red-500 text-[10px] font-bold px-2 py-1.5 rounded-full shadow-md transition-colors"
+                                            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white text-[10px] font-bold px-2 py-1.5 rounded-full"
                                         >
                                             ✕
                                         </button>
                                     </div>
                                 )}
-
-
                             </div>
                         );
                     })
@@ -695,68 +609,51 @@ export default function Home() {
             </div>
 
             {/* FOOTER NOTE */}
-            <div className="p-4 text-center bg-white/60 dark:bg-zinc-900/60 backdrop-blur-sm border-t border-gray-100 dark:border-zinc-800">
-                <p className="text-[10px] md:text-xs text-gray-400 dark:text-gray-500 font-bold tracking-wide">
+            <div className="p-4 text-center border-t border-zinc-900">
+                <p className="text-[10px] text-zinc-600 font-bold tracking-wide uppercase">
                     {text.keepAwake}
                 </p>
             </div>
 
-            {/* --- FLOATING SETTINGS (Bottom Right) --- */}
-            <div className="fixed bottom-16 right-4 flex gap-2 z-30">
+            {/* --- FLOATING SETTINGS (Lang Only - Removed Theme Toggle) --- */}
+            <div className="fixed bottom-16 right-4 z-30">
                 <button
                     onClick={() => setLang(l => l === 'vi' ? 'en' : 'vi')}
-                    className="w-10 h-10 bg-white dark:bg-zinc-800 rounded-full shadow-lg border border-gray-100 dark:border-zinc-700 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:scale-110 transition-transform font-bold text-xs"
+                    className="w-10 h-10 bg-zinc-900 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white font-bold text-xs hover:border-zinc-600 transition-colors"
                 >
                     {lang === 'vi' ? 'VI' : 'EN'}
-                </button>
-                <button
-                    onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
-                    className="w-10 h-10 bg-white dark:bg-zinc-800 rounded-full shadow-lg border border-gray-100 dark:border-zinc-700 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:scale-110 transition-transform"
-                >
-                    {theme === 'light' ? <IconMoon /> : <IconSun />}
                 </button>
             </div>
 
             {/* --- MODALS --- */}
+            
+            {/* 1. FILE LIST MODAL */}
             {showFilesModal && (
-                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-sm shadow-2xl flex flex-col max-h-[80vh]">
-                        {/* Header Modal */}
-                        <div className="p-4 border-b border-gray-100 dark:border-zinc-800 flex justify-between items-center">
-                            <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                    <div className="bg-zinc-900 rounded-2xl w-full max-w-sm border border-zinc-800 flex flex-col max-h-[80vh]">
+                        <div className="p-4 border-b border-zinc-800 flex justify-between items-center">
+                            <h3 className="font-bold text-white flex items-center gap-2">
                                 <IconFile /> {selectedFiles.length} {text.files}
                             </h3>
-                            <button
-                                onClick={clearAllFiles}
-                                className="text-xs text-red-500 font-bold hover:underline"
-                            >
-                                Xóa tất cả
+                            <button onClick={clearAllFiles} className="text-xs text-red-400 hover:text-red-300 font-bold">
+                                Xóa hết
                             </button>
                         </div>
-
-                        {/* List Files (Scrollable) */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-2">
                             {selectedFiles.map((file, idx) => (
-                                <div key={`${file.name}-${idx}`} className="flex items-center justify-between gap-3 p-3 bg-gray-50 dark:bg-zinc-800/50 rounded-xl">
+                                <div key={`${file.name}-${idx}`} className="flex items-center justify-between gap-3 p-3 bg-zinc-950 rounded-xl border border-zinc-800">
                                     <div className="min-w-0">
-                                        <div className="text-sm font-bold text-gray-700 dark:text-gray-200 truncate">{file.name}</div>
-                                        <div className="text-xs text-gray-400">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
+                                        <div className="text-sm font-bold text-zinc-300 truncate">{file.name}</div>
+                                        <div className="text-xs text-zinc-600">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
                                     </div>
-                                    <button
-                                        onClick={() => removeFile(idx)}
-                                        className="w-8 h-8 flex items-center justify-center bg-white dark:bg-zinc-800 text-gray-400 hover:text-red-500 rounded-full shadow-sm border border-gray-100 dark:border-zinc-700 transition-colors"
-                                    >
-                                        ✕
-                                    </button>
+                                    <button onClick={() => removeFile(idx)} className="text-zinc-500 hover:text-red-400">✕</button>
                                 </div>
                             ))}
                         </div>
-
-                        {/* Footer Modal */}
-                        <div className="p-4 border-t border-gray-100 dark:border-zinc-800">
+                        <div className="p-4 border-t border-zinc-800">
                             <button
                                 onClick={() => setShowFilesModal(false)}
-                                className="w-full py-3 bg-black dark:bg-white text-white dark:text-black rounded-xl font-bold shadow-lg active:scale-95 transition-transform"
+                                className="w-full py-3 bg-white text-black rounded-xl font-bold hover:bg-zinc-200 transition-colors"
                             >
                                 {text.close}
                             </button>
@@ -765,144 +662,101 @@ export default function Home() {
                 </div>
             )}
 
-            {/* --- MODE SELECTION MODAL (MENU) --- */}
+            {/* 2. MODE MENU MODAL */}
             {showModeModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[80] flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-gray-100 dark:border-zinc-800 flex flex-col">
-                        
-                        {/* Header Modal */}
-                        <div className="p-6 text-center border-b border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50">
-                            <h2 className="font-black text-lg text-gray-800 dark:text-white tracking-wide uppercase">
-                                {text.menuTitle}
-                            </h2>
-                            <p className="text-xs text-gray-400 font-bold mt-1">
+                <div className="fixed inset-0 bg-black/80 z-[80] flex items-center justify-center p-4">
+                    <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 overflow-hidden flex flex-col">
+                        <div className="p-6 text-center border-b border-zinc-800 bg-zinc-950">
+                            <h2 className="font-bold text-lg text-white uppercase tracking-wider">{text.menuTitle}</h2>
+                            <p className="text-xs text-zinc-500 font-bold mt-1">
                                 {roomId === "AUTO_DETECT" ? text.lanMode : `${text.room}: ${roomId}`}
                             </p>
                         </div>
 
-                        {/* Body Modal */}
                         <div className="p-6 space-y-3">
-
-                            {/* CASE 1: ĐANG Ở LAN (3 NÚT) */}
                             {roomId === "AUTO_DETECT" ? (
                                 <>
-                                    {/* 1. Tạo Kết Nối */}
-                                    <button 
-                                        onClick={() => {
-                                            handleCreateRoom();
-                                            setShowModeModal(false);
-                                        }}
-                                        className="w-full py-4 bg-black dark:bg-white text-white dark:text-black rounded-2xl font-bold shadow-lg hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+                                    <button
+                                        onClick={() => { handleCreateRoom(); setShowModeModal(false); }}
+                                        className="w-full py-4 bg-white text-black rounded-xl font-bold hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2"
                                     >
                                         <span>+</span> {text.createBtn}
                                     </button>
-
-                                    {/* 2. Nhập Code */}
-                                    <button 
-                                        onClick={() => {
-                                            setShowJoinInput(true);
-                                            // Lưu ý: showJoinInput sẽ đè lên modal này hoặc ông render inline input ở đây
-                                            // Cách đơn giản: Tắt modal này đi rồi bật modal nhập code (nếu ông tách modal nhập code ra riêng)
-                                            // Hoặc: Render input ngay trong này (xem đoạn dưới)
-                                        }}
-                                        className="w-full py-4 bg-white dark:bg-zinc-800 text-gray-800 dark:text-white border-2 border-gray-100 dark:border-zinc-700 rounded-2xl font-bold hover:border-blue-500 transition-colors"
+                                    <button
+                                        onClick={() => setShowJoinInput(true)}
+                                        className="w-full py-4 bg-zinc-800 text-white border border-zinc-700 rounded-xl font-bold hover:bg-zinc-700 transition-colors"
                                     >
                                         {text.joinBtn}
                                     </button>
-
-                                    {/* 3. Quay lại (Đóng Menu) */}
-                                    <button 
-                                        onClick={() => setShowModeModal(false)}
-                                        className="w-full py-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs font-bold uppercase tracking-wider mt-2"
-                                    >
+                                    <button onClick={() => setShowModeModal(false)} className="w-full py-3 text-zinc-500 hover:text-white text-xs font-bold uppercase mt-2">
                                         {text.backToLan}
                                     </button>
                                 </>
                             ) : (
-                                /* CASE 2: ĐANG KẾT NỐI PRIVATE (2 NÚT) */
                                 <>
-                                    {/* 1. Thoát Kết Nối */}
-                                    <button 
+                                    <button
                                         onClick={() => {
-                                            setRoomId("AUTO_DETECT"); // Về LAN
+                                            setRoomId("AUTO_DETECT");
                                             setShowModeModal(false);
-                                            toast.success("Đã quay về mạng LAN");
+                                            toast.success("Đã về LAN");
                                         }}
-                                        className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold shadow-lg shadow-red-500/30 hover:bg-red-600 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+                                        className="w-full py-4 bg-red-900/30 text-red-200 border border-red-900/50 rounded-xl font-bold hover:bg-red-900/50 transition-colors flex items-center justify-center gap-2"
                                     >
                                         <IconLogout /> {text.disconnectRoom}
                                     </button>
-
-                                    {/* 2. Nhập Code Khác */}
-                                    <button 
-                                        onClick={() => setShowJoinInput(true)}
-                                        className="w-full py-4 bg-white dark:bg-zinc-800 text-gray-800 dark:text-white border-2 border-gray-100 dark:border-zinc-700 rounded-2xl font-bold hover:border-blue-500 transition-colors"
-                                    >
+                                    <button onClick={() => setShowJoinInput(true)} className="w-full py-4 bg-zinc-800 text-white border border-zinc-700 rounded-xl font-bold hover:bg-zinc-700">
                                         {text.joinAnother}
                                     </button>
-                                    
-                                    {/* Nút đóng nhỏ (Optional) */}
-                                    <button 
-                                        onClick={() => setShowModeModal(false)}
-                                        className="w-full py-2 text-gray-400 text-[10px] font-bold uppercase"
-                                    >
+                                    <button onClick={() => setShowModeModal(false)} className="w-full py-2 text-zinc-500 text-[10px] font-bold uppercase">
                                         {text.close}
                                     </button>
                                 </>
                             )}
-                            
-                            {/* --- PHẦN NHẬP CODE (Lồng vào trong Menu này cho tiện) --- */}
+
+                            {/* JOIN INPUT OVERLAY */}
                             {showJoinInput && (
-                                <div className="absolute inset-0 bg-white dark:bg-zinc-900 z-10 flex flex-col p-6 animate-in slide-in-from-right">
-                                    <h3 className="font-bold mb-6 text-center text-lg">{text.joinBtn}</h3>
-                                    <input 
+                                <div className="absolute inset-0 bg-zinc-900 z-10 flex flex-col p-6">
+                                    <h3 className="font-bold mb-6 text-center text-lg text-white">{text.joinBtn}</h3>
+                                    <input
                                         autoFocus
                                         value={joinCodeInput}
                                         onChange={e => setJoinCodeInput(e.target.value.toUpperCase().slice(0, 5))}
                                         placeholder="XXXXX"
-                                        className="w-full bg-gray-50 dark:bg-zinc-800 text-center text-3xl font-black tracking-[0.5em] py-6 rounded-2xl outline-none border-2 focus:border-blue-500 transition-all uppercase mb-4"
+                                        className="w-full bg-zinc-950 text-white text-center text-3xl font-black tracking-[0.5em] py-6 rounded-xl outline-none border border-zinc-700 focus:border-white transition-colors uppercase mb-4 placeholder-zinc-800"
                                     />
                                     <div className="flex gap-3 mt-auto">
-                                        <button 
-                                            onClick={() => setShowJoinInput(false)}
-                                            className="flex-1 py-4 text-gray-500 font-bold bg-gray-100 dark:bg-zinc-800 rounded-xl"
-                                        >
+                                        <button onClick={() => setShowJoinInput(false)} className="flex-1 py-4 text-zinc-400 font-bold bg-zinc-800 rounded-xl hover:text-white">
                                             {text.cancel}
                                         </button>
-                                        <button 
-                                            onClick={() => {
-                                                handleJoinRoom();
-                                                setShowModeModal(false); // Đóng menu luôn sau khi join
-                                            }}
+                                        <button
+                                            onClick={() => { handleJoinRoom(); setShowModeModal(false); }}
                                             disabled={joinCodeInput.length < 5 || isBusy}
-                                            className="flex-1 bg-blue-600 text-white rounded-xl font-bold shadow-lg"
+                                            className="flex-1 bg-white text-black rounded-xl font-bold hover:bg-zinc-200 disabled:opacity-50"
                                         >
-                                            {isBusy ? "..." : "JOIN"}
+                                            JOIN
                                         </button>
                                     </div>
                                 </div>
                             )}
-
                         </div>
                     </div>
                 </div>
             )}
 
-
-            {/* 2. QR SHARE MODAL */}
+            {/* 3. QR SHARE MODAL */}
             {showShareModal && (
-                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl w-full max-w-xs shadow-2xl flex flex-col items-center text-center">
-                        <h2 className="font-bold text-lg mb-4 text-gray-800 dark:text-white">{text.scanQr}</h2>
-                        <div className="bg-white p-3 rounded-2xl border-2 border-gray-100 dark:border-zinc-800 shadow-inner mb-6">
-                            <QRCodeSVG value={getShareLink()} size={180} />
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+                    <div className="bg-zinc-900 p-8 rounded-2xl w-full max-w-xs border border-zinc-800 flex flex-col items-center text-center">
+                        <h2 className="font-bold text-lg mb-4 text-white">{text.scanQr}</h2>
+                        <div className="bg-white p-2 rounded-xl mb-6">
+                            <QRCodeSVG value={getShareLink()} size={160} />
                         </div>
-                        <div className="font-black text-2xl mb-6 text-gray-800 dark:text-white tracking-widest bg-gray-50 dark:bg-zinc-800 px-6 py-2 rounded-xl border border-gray-100 dark:border-zinc-700">
+                        <div className="font-black text-2xl mb-6 text-white tracking-widest bg-zinc-950 px-6 py-2 rounded-lg border border-zinc-800">
                             {actualRoomId}
                         </div>
                         <button
                             onClick={() => { navigator.clipboard.writeText(getShareLink()); setShowShareModal(false); }}
-                            className="w-full bg-gray-600 text-white py-3.5 rounded-xl font-bold hover:bg-gray-700 transition shadow-lg hover:shadow-xl active:scale-95"
+                            className="w-full bg-zinc-800 text-white py-3 rounded-xl font-bold hover:bg-zinc-700 border border-zinc-700"
                         >
                             {text.copyLink}
                         </button>
@@ -910,29 +764,25 @@ export default function Home() {
                 </div>
             )}
 
-            {/* 5. WAITING MODAL (SENDER) - "Đang chờ chấp nhận..." */}
+            {/* 4. WAITING MODAL */}
             {waitingForPeer && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in">
-                    <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl shadow-2xl flex flex-col items-center text-center max-w-sm w-full border border-gray-100 dark:border-zinc-800">
-                        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mb-4 animate-pulse">
+                <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+                    <div className="bg-zinc-900 p-8 rounded-2xl flex flex-col items-center text-center max-w-sm w-full border border-zinc-800">
+                        <div className="w-16 h-16 bg-zinc-800 text-zinc-200 rounded-full flex items-center justify-center mb-4 border border-zinc-700">
                             <IconLightning />
                         </div>
-                        <h3 className="font-bold text-lg text-gray-800 dark:text-white mb-2">{text.waitingAccept}</h3>
-                        <p className="text-sm text-gray-500 mb-6">
-                            {text.sendingTo} <span className="font-bold text-gray-800 dark:text-gray-200">{peers.find(p => p.id === waitingForPeer)?.name}</span>
+                        <h3 className="font-bold text-lg text-white mb-2">{text.waitingAccept}</h3>
+                        <p className="text-sm text-zinc-500 mb-6">
+                            {text.sendingTo} <span className="font-bold text-zinc-300">{peers.find(p => p.id === waitingForPeer)?.name}</span>
                         </p>
-
-                        {/* List file rút gọn */}
                         <div className="flex flex-wrap gap-2 justify-center mb-6">
                             {pendingFiles.slice(0, 3).map((f, i) => (
-                                <span key={i} className="text-[10px] bg-gray-100 dark:bg-zinc-800 px-2 py-1 rounded text-gray-500 border border-gray-200 dark:border-zinc-700 truncate max-w-[100px]">{f.name}</span>
+                                <span key={i} className="text-[10px] bg-zinc-950 px-2 py-1 rounded text-zinc-400 border border-zinc-800 truncate max-w-[100px]">{f.name}</span>
                             ))}
-                            {pendingFiles.length > 3 && <span className="text-[10px] text-gray-400">+{pendingFiles.length - 3}</span>}
                         </div>
-
                         <button
                             onClick={cancelRequest}
-                            className="w-full py-3 bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-500 dark:bg-zinc-800 dark:hover:bg-red-900/20 dark:text-gray-400 font-bold rounded-xl transition-colors"
+                            className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white font-bold rounded-xl transition-colors"
                         >
                             {text.cancel}
                         </button>
@@ -940,97 +790,85 @@ export default function Home() {
                 </div>
             )}
 
-            {/* 6. INCOMING REQUEST MODAL (RECEIVER) - "Có người muốn gửi file..." */}
+            {/* 5. INCOMING REQUEST MODAL */}
             {incomingQueues.length > 0 && !waitingForPeer && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in zoom-in-95">
-                    <div className="bg-white dark:bg-zinc-900 p-6 md:p-8 rounded-3xl shadow-2xl w-full max-w-sm border-2 border-blue-500 relative overflow-hidden">
-
-                        {/* Background Decoration */}
-                        <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl"></div>
-
-                        <div className="relative">
-                            <div className="flex items-center gap-4 mb-6">
-                                <div className="w-14 h-14 bg-blue-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-                                    <IconPackage />
-                                </div>
-                                <div>
-                                    <div className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-0.5">{text.requestTitle}</div>
-                                    <h3 className="font-black text-xl text-gray-800 dark:text-white">
-                                        {peers.find(p => p.id === incomingQueues[0].peerId)?.name || "Stranger"}
-                                    </h3>
-                                    <div className="text-xs text-gray-400">{text.wantsToSend}</div>
-                                </div>
+                <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
+                    <div className="bg-zinc-900 p-6 rounded-2xl w-full max-w-sm border border-zinc-700 relative">
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="w-14 h-14 bg-white text-black rounded-xl flex items-center justify-center">
+                                <IconPackage />
                             </div>
-
-                            {/* Danh sách file đến */}
-                            <div className="bg-gray-50 dark:bg-zinc-800/50 rounded-xl p-4 mb-6 max-h-[150px] overflow-y-auto border border-gray-100 dark:border-zinc-800">
-                                <div className="text-[10px] font-bold text-gray-400 mb-2 uppercase flex justify-between">
-                                    <span>Files</span>
-                                    <span>{incomingQueues[0].files.length}</span>
-                                </div>
-                                <div className="space-y-2">
-                                    {incomingQueues[0].files.map((fileName, idx) => (
-                                        <div key={idx} className="flex items-center gap-2">
-                                            <IconFile />
-                                            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 truncate">{fileName}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                            <div>
+                                <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-0.5">{text.requestTitle}</div>
+                                <h3 className="font-black text-xl text-white">
+                                    {peers.find(p => p.id === incomingQueues[0].peerId)?.name || "Stranger"}
+                                </h3>
+                                <div className="text-xs text-zinc-400">{text.wantsToSend}</div>
                             </div>
+                        </div>
 
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => rejectIncomingQueue(incomingQueues[0].peerId)}
-                                    className="flex-1 py-3.5 bg-gray-100 dark:bg-zinc-800 text-gray-500 hover:text-red-500 dark:text-gray-400 font-bold rounded-xl transition-colors"
-                                >
-                                    {text.reject}
-                                </button>
-                                <button
-                                    onClick={() => acceptIncomingRequest(incomingQueues[0].peerId)}
-                                    className="flex-1 py-3.5 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 hover:scale-[1.02] transition-all"
-                                >
-                                    {text.accept}
-                                </button>
+                        <div className="bg-zinc-950 rounded-xl p-4 mb-6 max-h-[150px] overflow-y-auto border border-zinc-800">
+                            <div className="text-[10px] font-bold text-zinc-600 mb-2 uppercase flex justify-between">
+                                <span>Files</span>
+                                <span>{incomingQueues[0].files.length}</span>
                             </div>
+                            <div className="space-y-2">
+                                {incomingQueues[0].files.map((fileName, idx) => (
+                                    <div key={idx} className="flex items-center gap-2">
+                                        <IconFile />
+                                        <span className="text-xs font-bold text-zinc-300 truncate">{fileName}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => rejectIncomingQueue(incomingQueues[0].peerId)}
+                                className="flex-1 py-3 bg-zinc-800 text-zinc-400 hover:text-white font-bold rounded-xl transition-colors"
+                            >
+                                {text.reject}
+                            </button>
+                            <button
+                                onClick={() => acceptIncomingRequest(incomingQueues[0].peerId)}
+                                className="flex-1 py-3 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition-colors"
+                            >
+                                {text.accept}
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* 3. PROGRESS BAR */}
+            {/* 6. PROGRESS BAR (Gray Scale) */}
             {(activeTask || downloadProgresses) && (
-
                 <div className="fixed bottom-12 left-4 right-4 z-40 flex flex-col gap-2 pointer-events-none">
-
-                    {/* THANH GỬI (UPLOAD) */}
+                    {/* UPLOAD */}
                     {activeTask && uploadProgress && (
-                        <div className="pointer-events-auto max-w-md mx-auto w-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl rounded-2xl shadow-lg border border-green-100 dark:border-green-900/30 p-3 relative overflow-hidden animate-in slide-in-from-bottom-5">
-                            <div className="absolute top-0 left-0 h-1 bg-green-500 transition-all duration-300" style={{ width: `${uploadProgress.pct}%` }}></div>
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
+                        <div className="pointer-events-auto max-w-md mx-auto w-full bg-zinc-900 rounded-xl border border-zinc-800 p-3 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 bottom-0 bg-zinc-800 transition-all duration-300" style={{ width: `${uploadProgress.pct}%` }}></div>
+                            <div className="relative flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-zinc-950 text-white border border-zinc-800">
                                     <IconArrowUp />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center">
-                                        <span className="font-bold text-xs text-gray-800 dark:text-gray-100 truncate pr-2">
+                                        <span className="font-bold text-xs text-white truncate pr-2">
                                             {text.sendingTo} {activeTask.peerName}
                                         </span>
-                                        <span className="text-[10px] font-black text-green-600 bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded">
+                                        <span className="text-[10px] font-black text-white bg-black/50 px-1.5 py-0.5 rounded">
                                             {uploadProgress.pct}%
                                         </span>
                                     </div>
-                                    <div className="text-[10px] text-gray-400 truncate">{uploadProgress.name}</div>
+                                    <div className="text-[10px] text-zinc-400 truncate">{uploadProgress.name}</div>
                                 </div>
                                 <button
                                     onClick={() => {
-                                        // 1. Gọi logic hủy gửi
                                         cancelOutgoingFile(uploadProgress.fileId, activeTask.targetId);
-
-                                        // 2. 👇 THÊM DÒNG NÀY: Force tắt UI ngay lập tức cho mượt
                                         setActiveTask(null);
                                         setUploadProgress(null);
                                     }}
-                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-100 text-gray-300 hover:text-red-500 transition-colors"
+                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-white"
                                 >
                                     ✕
                                 </button>
@@ -1038,36 +876,28 @@ export default function Home() {
                         </div>
                     )}
 
-                    {/* THANH NHẬN (DOWNLOAD) */}
+                    {/* DOWNLOAD */}
                     {Object.values(downloadProgresses).map((progress) => (
-                        <div key={progress.fileId} className="pointer-events-auto max-w-md mx-auto w-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl rounded-2xl shadow-lg border border-blue-100 dark:border-blue-900/30 p-3 relative overflow-hidden animate-in slide-in-from-bottom-5">
-
-                            {/* Thanh % */}
-                            <div className="absolute top-0 left-0 h-1 bg-blue-500 transition-all duration-300" style={{ width: `${progress.percentage}%` }}></div>
-
-                            <div className="flex items-center gap-3">
-                                {/* Icon */}
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                        <div key={progress.fileId} className="pointer-events-auto max-w-md mx-auto w-full bg-zinc-900 rounded-xl border border-zinc-800 p-3 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 bottom-0 bg-zinc-700 transition-all duration-300" style={{ width: `${progress.percentage}%` }}></div>
+                            <div className="relative flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-white text-black">
                                     <IconArrowDown />
                                 </div>
-
-                                {/* Info */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center">
-                                        <span className="font-bold text-xs text-gray-800 dark:text-gray-100 truncate pr-2">
+                                        <span className="font-bold text-xs text-white truncate pr-2">
                                             {text.receivingFrom} {peers.find(p => p.id === progress.peerId)?.name}
                                         </span>
-                                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">
+                                        <span className="text-[10px] font-black text-white bg-black/50 px-1.5 py-0.5 rounded">
                                             {progress.percentage}%
                                         </span>
                                     </div>
-                                    <div className="text-[10px] text-gray-400 truncate">{progress.fileName}</div>
+                                    <div className="text-[10px] text-zinc-400 truncate">{progress.fileName}</div>
                                 </div>
-
-                                {/* Nút Hủy riêng cho từng file */}
                                 <button
                                     onClick={() => rejectIncomingFile(progress.fileId, progress.peerId)}
-                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-100 text-gray-300 hover:text-red-500 transition-colors"
+                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-white"
                                 >
                                     ✕
                                 </button>
@@ -1077,27 +907,19 @@ export default function Home() {
                 </div>
             )}
 
-
             <Toaster
                 position="bottom-center"
-                reverseOrder={false}
                 toastOptions={{
-                    className: '',
                     style: {
-                        background: '#333',
+                        background: '#18181b', 
                         color: '#fff',
-                        borderRadius: '12px',
-                        padding: '16px',
+                        border: '1px solid #27272a', 
+                        borderRadius: '8px',
+                        padding: '12px',
                         fontSize: '14px',
-                        fontWeight: 'bold',
                     },
-
-                    success: { style: { background: 'green' } },
-                    error: { style: { background: 'red' } },
                 }}
             />
-
-
         </div>
     );
 }
