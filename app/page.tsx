@@ -27,6 +27,10 @@ const IconList = () => <svg className="w-5 h-5" fill="none" stroke="currentColor
 type Lang = 'vi' | 'en';
 type Theme = 'light' | 'dark';
 
+const IconQueue = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>;
+const IconCheck = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>;
+const IconClock = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+
 // --- CONFIG ---
 type QueueItem = { id: string; targetId: string; peerName: string; files: File[]; };
 const MAX_FILE_SIZE = 1 * 1024 * 1024 * 1024; // 2GB
@@ -82,6 +86,7 @@ export default function Home() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isCoolingDown, setIsCoolingDown] = useState(false);
+    const [showQueuePanel, setShowQueuePanel] = useState(false);
     useEffect(() => {
         const handleOffline = () => {
             // Khi mất mạng: Báo lỗi đỏ, rung máy (nếu có thể), chặn thao tác
@@ -827,7 +832,7 @@ export default function Home() {
                         {/* Header */}
                         <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-950 shrink-0">
                             <h3 className="font-bold text-white flex items-center gap-2 text-lg">
-                             {text.noteTitle}
+                                {text.noteTitle}
                             </h3>
                             <button
                                 onClick={() => setShowNoteModal(false)}
@@ -1161,86 +1166,164 @@ export default function Home() {
             )}
 
             {/* 6. PROGRESS BAR (Gray Scale) */}
-            {(activeTask || downloadProgresses) && (
-                <div className="fixed bottom-12 left-4 right-4 z-40 flex flex-col gap-2 pointer-events-none">
+            {/* 6. TRANSFER MANAGER (Thay thế Progress Bar cũ) */}
+            {/* Logic: Chỉ hiện khi có Active Task (gửi/nhận) hoặc có Queue đợi */}
+            {(activeTask || queue.length > 0 || Object.keys(downloadProgresses).length > 0) && (
+                <>
+                    {/* Nút Toggle Panel (Góc dưới trái) */}
+                    <div className="fixed bottom-16 left-4 z-30">
+                        <button
+                            onClick={() => setShowQueuePanel(!showQueuePanel)}
+                            className={`
+                                h-10 px-4 rounded-full border flex items-center gap-2 shadow-lg transition-all
+                                ${showQueuePanel
+                                    ? 'bg-white text-black border-white'
+                                    : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-600 animate-pulse'
+                                }
+                            `}
+                        >
+                            {showQueuePanel ? (
+                                <span className="text-xs font-bold">Đóng</span>
+                            ) : (
+                                <>
+                                    <IconQueue />
+                                    <span className="text-xs font-bold">
+                                        {/* Đếm tổng số task đang chạy + đợi */}
+                                        {queue.length + (activeTask ? 1 : 0) + Object.keys(downloadProgresses).length}
+                                    </span>
+                                </>
+                            )}
+                        </button>
+                    </div>
 
-                    {activeTask && uploadProgress && (
-                        <div className="pointer-events-auto max-w-md mx-auto w-full bg-zinc-900 rounded-xl border border-zinc-800 p-3 relative overflow-hidden animate-in slide-in-from-bottom-5">
+                    {/* PANEL HIỂN THỊ CHI TIẾT */}
+                    {showQueuePanel && (
+                        <div className="fixed bottom-28 left-4 z-40 w-full max-w-sm animate-in slide-in-from-bottom-5 fade-in duration-300">
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh]">
 
-                            {/* Background Progress Bar */}
-                            <div className="absolute top-0 left-0 bottom-0 bg-zinc-800 transition-all duration-300" style={{ width: `${uploadProgress.pct}%` }}></div>
-
-                            <div className="relative flex items-center gap-3">
-                                {/* Icon */}
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-zinc-950 text-white border border-zinc-800">
-                                    <IconArrowUp />
-                                </div>
-
-                                {/* Info */}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-bold text-xs text-white truncate pr-2">
-                                            {text.sendingTo} {activeTask.peerName}
-
-
-                                            {uploadProgress?.total && uploadProgress.total > 1 && (
-                                                <span className="ml-1 text-[10px] text-zinc-400 font-normal">
-                                                    ({uploadProgress.current}/{uploadProgress.total})
-                                                </span>
-                                            )}
-                                        </span>
-
-                                        <span className="text-[10px] font-black text-white bg-black/50 px-1.5 py-0.5 rounded">
-                                            {uploadProgress.pct}%
-                                        </span>
+                                {/* Header */}
+                                <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-950 flex justify-between items-center">
+                                    <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                                        <IconQueue /> Quản lý File
+                                    </h3>
+                                    <div className="text-[10px] text-zinc-500 font-bold uppercase">
+                                        {queue.length} đợi • {activeTask || Object.keys(downloadProgresses).length > 0 ? 'Đang chạy' : 'Rảnh'}
                                     </div>
-                                    <div className="text-[10px] text-zinc-400 truncate">{uploadProgress.name}</div>
                                 </div>
 
+                                {/* Body List */}
+                                <div className="overflow-y-auto p-2 space-y-2 bg-zinc-900/90 backdrop-blur-sm">
 
-                                <button
-                                    onClick={() => {
-                                        cancelOutgoingFile(uploadProgress.fileId, activeTask.targetId);
-                                        setActiveTask(null);
-                                        setUploadProgress(null);
-                                    }}
-                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-white transition-colors"
-                                >
-                                    ✕
-                                </button>
+                                    {/* 1. UPLOAD ĐANG CHẠY (ACTIVE TASK) */}
+                                    {activeTask && uploadProgress && (
+                                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-3 relative overflow-hidden group">
+                                            {/* Progress Bar Background */}
+                                            <div className="absolute top-0 left-0 bottom-0 bg-emerald-500/10 transition-all duration-300" style={{ width: `${uploadProgress.pct}%` }}></div>
+                                            <div className="absolute bottom-0 left-0 h-1 bg-emerald-500 transition-all duration-300" style={{ width: `${uploadProgress.pct}%` }}></div>
+
+                                            <div className="relative flex justify-between items-start">
+                                                <div className="flex gap-3 overflow-hidden">
+                                                    <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-700 text-emerald-500 shrink-0">
+                                                        <IconArrowUp />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-xs font-bold text-white flex items-center gap-1">
+                                                            Gửi: {activeTask.peerName}
+                                                            {uploadProgress.total > 1 && (
+                                                                <span className="text-[10px] bg-zinc-700 px-1 rounded text-zinc-300">
+                                                                    {uploadProgress.current}/{uploadProgress.total}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-[10px] text-zinc-400 truncate mt-0.5">{uploadProgress.name}</div>
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => cancelOutgoingFile(uploadProgress.fileId, activeTask.targetId)}
+                                                    className="text-zinc-500 hover:text-red-400 p-1"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                            <div className="absolute top-2 right-8 text-[10px] font-black text-emerald-500">
+                                                {uploadProgress.pct}%
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* 2. DOWNLOAD ĐANG CHẠY */}
+                                    {Object.values(downloadProgresses).map((progress) => (
+                                        <div key={progress.fileId} className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-3 relative overflow-hidden">
+                                            <div className="absolute bottom-0 left-0 h-1 bg-blue-500 transition-all duration-300" style={{ width: `${progress.percentage}%` }}></div>
+                                            <div className="relative flex justify-between items-start">
+                                                <div className="flex gap-3 overflow-hidden">
+                                                    <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-700 text-blue-500 shrink-0">
+                                                        <IconArrowDown />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-xs font-bold text-white">
+                                                            Nhận: {peers.find(p => p.id === progress.peerId)?.name}
+                                                        </div>
+                                                        <div className="text-[10px] text-zinc-400 truncate mt-0.5">{progress.fileName}</div>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => rejectIncomingFile(progress.fileId, progress.peerId)}
+                                                    className="text-zinc-500 hover:text-red-400 p-1"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                            <div className="absolute top-2 right-8 text-[10px] font-black text-blue-500">
+                                                {progress.percentage}%
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {/* 3. HÀNG ĐỢI (QUEUE) */}
+                                    {queue.length > 0 && (
+                                        <>
+                                            <div className="px-1 py-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-2">
+                                                Đang chờ ({queue.length})
+                                            </div>
+                                            {queue.map((item, idx) => (
+                                                <div key={item.id} className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-3 flex justify-between items-center opacity-70">
+                                                    <div className="flex gap-3 items-center min-w-0">
+                                                        <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-800 text-zinc-600 shrink-0">
+                                                            <IconClock />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-xs font-bold text-zinc-400">
+                                                                Gửi: {item.peerName}
+                                                            </div>
+                                                            <div className="text-[10px] text-zinc-600 truncate">
+                                                                {item.files.length} file • {(item.files.reduce((acc, f) => acc + f.size, 0) / 1024 / 1024).toFixed(1)} MB
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setQueue(prev => prev.filter(q => q.id !== item.id))}
+                                                        className="text-zinc-600 hover:text-red-400 p-1 text-xs"
+                                                    >
+                                                        Hủy
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </>
+                                    )}
+
+                                    {/* Empty State */}
+                                    {!activeTask && queue.length === 0 && Object.keys(downloadProgresses).length === 0 && (
+                                        <div className="text-center py-6 text-zinc-600 text-xs italic">
+                                            Không có tiến trình nào
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
-
-                    {/* DOWNLOAD */}
-                    {Object.values(downloadProgresses).map((progress) => (
-                        <div key={progress.fileId} className="pointer-events-auto max-w-md mx-auto w-full bg-zinc-900 rounded-xl border border-zinc-800 p-3 relative overflow-hidden">
-                            <div className="absolute top-0 left-0 bottom-0 bg-zinc-700 transition-all duration-300" style={{ width: `${progress.percentage}%` }}></div>
-                            <div className="relative flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-white text-black">
-                                    <IconArrowDown />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-bold text-xs text-white truncate pr-2">
-                                            {text.receivingFrom} {peers.find(p => p.id === progress.peerId)?.name}
-                                        </span>
-                                        <span className="text-[10px] font-black text-white bg-black/50 px-1.5 py-0.5 rounded">
-                                            {progress.percentage}%
-                                        </span>
-                                    </div>
-                                    <div className="text-[10px] text-zinc-400 truncate">{progress.fileName}</div>
-                                </div>
-                                <button
-                                    onClick={() => rejectIncomingFile(progress.fileId, progress.peerId)}
-                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-800 text-zinc-500 hover:text-white"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                </>
             )}
 
             <Toaster

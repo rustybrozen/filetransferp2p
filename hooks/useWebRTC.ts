@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import Peer from "simple-peer";
 import { getDeviceId } from "@/utils/nameGenerator";
-import { FileHeader, FileEnd, TextNote } from "@/types/transfer"; 
+import { FileHeader, FileEnd, TextNote } from "@/types/transfer";
 
 export interface User {
   id: string;
@@ -62,6 +62,16 @@ export const useWebRTC = (roomId: string, userName: string) => {
   const chunkTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const [acceptedPeerId, setAcceptedPeerId] = useState<string | null>(null);
   const [receivedNotes, setReceivedNotes] = useState<TextNote[]>([]);
+  const [iceServers, setIceServers] = useState<RTCIceServer[]>([
+    { urls: "stun:stun.l.google.com:19302" },
+  ]);
+
+  useEffect(() => {
+    fetch("/api/i")
+      .then((res) => res.json())
+      .then((data) => setIceServers(data))
+      .catch((err) => console.error("Failed", err));
+  }, []);
   const updateDisplayStatus = (peerId: string) => {
     const status = connStatusRef.current[peerId];
     if (!status) return;
@@ -120,8 +130,11 @@ export const useWebRTC = (roomId: string, userName: string) => {
         }
 
         if (msg.type === "text-note") {
-             setReceivedNotes(prev => [...prev, { ...msg, senderId: fromPeerId }]);
-             return;
+          setReceivedNotes((prev) => [
+            ...prev,
+            { ...msg, senderId: fromPeerId },
+          ]);
+          return;
         }
         if (msg.type === "conn-update") {
           if (!connStatusRef.current[fromPeerId])
@@ -359,18 +372,10 @@ export const useWebRTC = (roomId: string, userName: string) => {
     // Trong hàm createPeer
     const peer = new Peer({
       initiator,
-      trickle: false, // Giữ false cho mạng LAN ổn định
+      trickle: false,
       config: {
         iceTransportPolicy: "all",
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:global.stun.twilio.com:3478" },
-          {
-            urls: "turn:192.9.175.71:3478",
-            username: "admin",
-            credential: "admin123",
-          },
-        ],
+        iceServers: iceServers,
       },
     });
     peer.on("connect", () => {
@@ -504,20 +509,18 @@ export const useWebRTC = (roomId: string, userName: string) => {
     []
   );
 
-
   const broadcastNote = (content: string, myId: string) => {
     const note: TextNote = {
-      type: 'text-note',
+      type: "text-note",
       id: Math.random().toString(36).substr(2, 9),
-      senderId: myId, 
+      senderId: myId,
       content,
       timestamp: Date.now(),
     };
 
     const msgString = JSON.stringify(note);
 
-
-    Object.values(peersRef.current).forEach(peer => {
+    Object.values(peersRef.current).forEach((peer) => {
       try {
         peer.send(msgString);
       } catch (e) {
@@ -549,6 +552,6 @@ export const useWebRTC = (roomId: string, userName: string) => {
     setAcceptedPeerId,
     receivedNotes, // Export state này
     broadcastNote, // Export hàm này
-    setReceivedNotes
+    setReceivedNotes,
   };
 };
