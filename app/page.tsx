@@ -1164,10 +1164,9 @@ export default function Home() {
                     </div>
                 </div>
             )}
-
+            {/* 6. TRANSFER MANAGER */}
             {(activeTask || queue.length > 0 || Object.keys(downloadProgresses).length > 0) && (
                 <>
-                    {/* Nút Toggle Panel (Góc dưới trái) */}
                     <div className="fixed bottom-16 left-4 z-30">
                         <button
                             onClick={() => setShowQueuePanel(!showQueuePanel)}
@@ -1185,7 +1184,6 @@ export default function Home() {
                                 <>
                                     <IconQueue />
                                     <span className="text-xs font-bold">
-                                        {/* Đếm tổng số task đang chạy + đợi */}
                                         {queue.length + (activeTask ? 1 : 0) + Object.keys(downloadProgresses).length}
                                     </span>
                                 </>
@@ -1193,13 +1191,17 @@ export default function Home() {
                         </button>
                     </div>
 
-                    {/* PANEL HIỂN THỊ CHI TIẾT */}
                     {showQueuePanel && (
-                        <div className="fixed bottom-28 left-4 z-40 w-full max-w-sm animate-in slide-in-from-bottom-5 fade-in duration-300">
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[60vh]">
+                        <div className="fixed inset-0 md:inset-auto md:bottom-28 md:left-4 z-[80] md:z-40 flex flex-col justify-end md:block">
+                            <div
+                                className="absolute inset-0 bg-black/60 md:hidden"
+                                onClick={() => setShowQueuePanel(false)}
+                            />
 
-                                {/* Header */}
-                                <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-950 flex justify-between items-center">
+                            <div className="relative bg-zinc-900 border-t md:border border-zinc-800 rounded-t-3xl md:rounded-2xl shadow-2xl overflow-hidden flex flex-col w-full md:max-w-sm max-h-[70vh] md:max-h-[60vh] animate-in slide-in-from-bottom duration-300">
+                                <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto mt-3 md:hidden" />
+
+                                <div className="px-5 py-4 md:px-4 md:py-3 border-b border-zinc-800 bg-zinc-950 flex justify-between items-center">
                                     <h3 className="font-bold text-white text-sm flex items-center gap-2">
                                         <IconQueue /> Quản lý File
                                     </h3>
@@ -1208,13 +1210,9 @@ export default function Home() {
                                     </div>
                                 </div>
 
-                                {/* Body List */}
-                                <div className="overflow-y-auto p-2 space-y-2 bg-zinc-900/90 backdrop-blur-sm">
-
-                                    {/* 1. UPLOAD ĐANG CHẠY (ACTIVE TASK) */}
+                                <div className="overflow-y-auto p-3 space-y-2 bg-zinc-900/90 backdrop-blur-sm pb-10 md:pb-3">
                                     {activeTask && uploadProgress && (
                                         <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-3 relative overflow-hidden group">
-                                            {/* Progress Bar Background */}
                                             <div className="absolute top-0 left-0 bottom-0 bg-emerald-500/10 transition-all duration-300" style={{ width: `${uploadProgress.pct}%` }}></div>
                                             <div className="absolute bottom-0 left-0 h-1 bg-emerald-500 transition-all duration-300" style={{ width: `${uploadProgress.pct}%` }}></div>
 
@@ -1237,19 +1235,22 @@ export default function Home() {
                                                 </div>
 
                                                 <button
-                                                    onClick={() => cancelOutgoingFile(uploadProgress.fileId, activeTask.targetId)}
-                                                    className="text-zinc-500 hover:text-red-400 p-1"
+                                                    onClick={() => {
+                                                        cancelOutgoingFile(uploadProgress.fileId, activeTask.targetId);
+                                                        setActiveTask(null);
+                                                        setUploadProgress(null);
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-900/50 text-zinc-500 hover:text-red-400"
                                                 >
                                                     ✕
                                                 </button>
                                             </div>
-                                            <div className="absolute top-2 right-8 text-[10px] font-black text-emerald-500">
+                                            <div className="absolute top-2 right-10 text-[10px] font-black text-emerald-500">
                                                 {uploadProgress.pct}%
                                             </div>
                                         </div>
                                     )}
 
-                                    {/* 2. DOWNLOAD ĐANG CHẠY */}
                                     {Object.values(downloadProgresses).map((progress) => (
                                         <div key={progress.fileId} className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-3 relative overflow-hidden">
                                             <div className="absolute bottom-0 left-0 h-1 bg-blue-500 transition-all duration-300" style={{ width: `${progress.percentage}%` }}></div>
@@ -1267,24 +1268,23 @@ export default function Home() {
                                                 </div>
                                                 <button
                                                     onClick={() => rejectIncomingFile(progress.fileId, progress.peerId)}
-                                                    className="text-zinc-500 hover:text-red-400 p-1"
+                                                    className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-900/50 text-zinc-500 hover:text-red-400"
                                                 >
                                                     ✕
                                                 </button>
                                             </div>
-                                            <div className="absolute top-2 right-8 text-[10px] font-black text-blue-500">
+                                            <div className="absolute top-2 right-10 text-[10px] font-black text-blue-500">
                                                 {progress.percentage}%
                                             </div>
                                         </div>
                                     ))}
 
-                                    {/* 3. HÀNG ĐỢI (QUEUE) */}
                                     {queue.length > 0 && (
                                         <>
                                             <div className="px-1 py-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-2">
                                                 Đang chờ ({queue.length})
                                             </div>
-                                            {queue.map((item, idx) => (
+                                            {queue.map((item) => (
                                                 <div key={item.id} className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-3 flex justify-between items-center opacity-70">
                                                     <div className="flex gap-3 items-center min-w-0">
                                                         <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-800 text-zinc-600 shrink-0">
@@ -1301,18 +1301,17 @@ export default function Home() {
                                                     </div>
                                                     <button
                                                         onClick={() => setQueue(prev => prev.filter(q => q.id !== item.id))}
-                                                        className="text-zinc-600 hover:text-red-400 p-1 text-xs"
+                                                        className="text-zinc-600 hover:text-red-400 p-2 text-xs font-bold"
                                                     >
-                                                        Hủy
+                                                        HỦY
                                                     </button>
                                                 </div>
                                             ))}
                                         </>
                                     )}
 
-                                    {/* Empty State */}
                                     {!activeTask && queue.length === 0 && Object.keys(downloadProgresses).length === 0 && (
-                                        <div className="text-center py-6 text-zinc-600 text-xs italic">
+                                        <div className="text-center py-10 text-zinc-600 text-xs italic">
                                             Không có tiến trình nào
                                         </div>
                                     )}
