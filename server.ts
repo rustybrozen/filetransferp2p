@@ -180,7 +180,7 @@ socket.on("check-room-availability", async (roomId: string, callback: (exists: b
         callback(!!exists);
     });
 
-    
+    // 5. Disconnect
 socket.on("disconnect", () => {
       
       rateLimiterSignal.delete(socket.id); 

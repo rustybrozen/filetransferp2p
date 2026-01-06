@@ -1165,9 +1165,6 @@ export default function Home() {
                 </div>
             )}
 
-            {/* 6. PROGRESS BAR (Gray Scale) */}
-            {/* 6. TRANSFER MANAGER (Thay thế Progress Bar cũ) */}
-            {/* Logic: Chỉ hiện khi có Active Task (gửi/nhận) hoặc có Queue đợi */}
             {(activeTask || queue.length > 0 || Object.keys(downloadProgresses).length > 0) && (
                 <>
                     {/* Nút Toggle Panel (Góc dưới trái) */}
