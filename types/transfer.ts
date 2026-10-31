@@ -1,4 +1,4 @@
-// types/transfer.ts
+
 export interface FileHeader {
   type: 'metadata';
   fileId: string;
@@ -19,3 +19,5 @@ export interface TextNote {
   content: string;
   timestamp: number;
 }
+
+

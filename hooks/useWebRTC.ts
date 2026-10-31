@@ -26,6 +26,7 @@ interface IncomingFile {
   };
   writer: WritableStreamDefaultWriter;
   receivedSize: number;
+  lastPercent?: number;
 }
 
 export type IncomingQueueItem = {
@@ -115,11 +116,69 @@ export const useWebRTC = (roomId: string, userName: string) => {
     []
   );
 
-  // Thay thế toàn bộ hàm handleDataStream cũ bằng hàm này
-  const handleDataStream = async (data: Buffer, fromPeerId: string) => {
-    const dataStr = data.toString();
+  const handleDataStream = async (data: Buffer | Uint8Array, fromPeerId: string) => {
 
-    // 1. XỬ LÝ TÍN HIỆU (JSON)
+    if (data[0] === 0x01) {
+      const fileIdLen = data[1];
+      if (!fileIdLen || data.length < 2 + fileIdLen) return;
+
+      const fileId = new TextDecoder().decode(data.subarray(2, 2 + fileIdLen));
+      if (isFileRejected(fileId)) return;
+
+      const file = incomingFiles.current.get(fileId);
+      if (!file) return;
+
+      if (chunkTimeouts.current.has(fileId)) {
+        clearTimeout(chunkTimeouts.current.get(fileId)!);
+      }
+      chunkTimeouts.current.set(
+        fileId,
+        setTimeout(() => {
+          rejectIncomingFile(fileId, fromPeerId, "Mất kết nối quá lâu");
+        }, 30000)
+      );
+
+      try {
+        const rawChunk = data.subarray(2 + fileIdLen);
+        await file.writer.write(rawChunk);
+
+        file.receivedSize += rawChunk.byteLength;
+        const percent = Math.min(
+          100,
+          Math.round((file.receivedSize / file.metadata.fileSize) * 100)
+        );
+
+        if (file.lastPercent !== percent) {
+          file.lastPercent = percent;
+          setDownloadProgresses((prev) => ({
+            ...prev,
+            [fileId]: {
+              fileName: file.metadata.fileName,
+              percentage: percent,
+              peerId: fromPeerId,
+              fileId,
+            },
+          }));
+        }
+      } catch {
+        file.writer.abort("Lỗi ghi file").catch(() => {});
+        cleanUpFile(fileId);
+        const peer = peersRef.current[fromPeerId];
+        if (peer) {
+          peer.send(
+            JSON.stringify({
+              type: "error",
+              fileId,
+              reason: "Lỗi ghi file",
+            })
+          );
+        }
+      }
+      return;
+    }
+
+
+    const dataStr = data.toString();
     if (dataStr.startsWith('{"type":')) {
       try {
         const msg = JSON.parse(dataStr);
@@ -136,6 +195,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
           ]);
           return;
         }
+
         if (msg.type === "conn-update") {
           if (!connStatusRef.current[fromPeerId])
             connStatusRef.current[fromPeerId] = { local: null, remote: null };
@@ -144,7 +204,6 @@ export const useWebRTC = (roomId: string, userName: string) => {
           return;
         }
 
-        // KHI NHẬN METADATA (Bắt đầu file mới)
         if (msg.type === "metadata") {
           const streamSaver = (await import("streamsaver")).default;
           const fileStream = streamSaver.createWriteStream(msg.fileName, {
@@ -156,9 +215,9 @@ export const useWebRTC = (roomId: string, userName: string) => {
             metadata: msg,
             writer,
             receivedSize: 0,
+            lastPercent: 0,
           });
 
-          // 👇 FIX LỖI: Dùng setDownloadProgresses (số nhiều)
           setDownloadProgresses((prev) => ({
             ...prev,
             [msg.fileId]: {
@@ -180,10 +239,10 @@ export const useWebRTC = (roomId: string, userName: string) => {
           if (file) {
             await file.writer.close();
             cleanUpFile(msg.fileId);
-            // Check xem còn file nào từ peer này không, nếu không thì clear queue
+
             const stillHasFiles = Array.from(
               incomingFiles.current.values()
-            ).some((f) => f.metadata.fileId !== msg.fileId); // Logic đơn giản
+            ).some((f) => f.metadata.fileId !== msg.fileId);
             if (!stillHasFiles) {
               setIncomingQueues((prev) =>
                 prev.filter((q) => q.peerId !== fromPeerId)
@@ -194,63 +253,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
           rejectedFileIds.current.add(msg.fileId);
         }
       } catch (e) {
-        console.error(e);
-      }
-      return;
-    }
-
-    // 2. XỬ LÝ DATA FILE (BINARY)
-    const activeFileId = Array.from(incomingFiles.current.keys()).pop();
-
-    // 👇 FIX LỖI TYPE: Check chắc chắn activeFileId là string
-    if (activeFileId && typeof activeFileId === "string") {
-      if (chunkTimeouts.current.has(activeFileId)) {
-        clearTimeout(chunkTimeouts.current.get(activeFileId)!);
-      }
-      chunkTimeouts.current.set(
-        activeFileId,
-        setTimeout(() => {
-          rejectIncomingFile(activeFileId, fromPeerId, "Mất kết nối quá lâu");
-        }, 30000)
-      );
-
-      const file = incomingFiles.current.get(activeFileId);
-
-      // 👇 FIX LỖI SCOPE: Logic update phải nằm trong khối if(file) này
-      if (file) {
-        try {
-          const uint8array = new Uint8Array(data);
-          await file.writer.write(uint8array);
-
-          file.receivedSize += uint8array.byteLength;
-          const percent = Math.round(
-            (file.receivedSize / file.metadata.fileSize) * 100
-          );
-
-          // 👇 UPDATE STATE Ở ĐÂY LÀ CHUẨN (Vì 'file' và 'percent' đang tồn tại ở đây)
-          setDownloadProgresses((prev) => ({
-            ...prev,
-            [activeFileId]: {
-              fileName: file.metadata.fileName,
-              percentage: percent,
-              peerId: fromPeerId,
-              fileId: activeFileId,
-            },
-          }));
-        } catch {
-          file.writer.abort("Lỗi ghi file").catch(() => {});
-          cleanUpFile(activeFileId);
-          const peer = peersRef.current[fromPeerId];
-          if (peer) {
-            peer.send(
-              JSON.stringify({
-                type: "error",
-                fileId: activeFileId,
-                reason: "Lỗi ghi file",
-              })
-            );
-          }
-        }
+        console.error("Signal parsing error:", e);
       }
     }
   };
@@ -304,28 +307,27 @@ export const useWebRTC = (roomId: string, userName: string) => {
     return peersRef.current[id];
   };
 
-  // Thêm đoạn này vào trong hook useWebRTC
+
   const checkConnectionType = async (peer: Peer.Instance, peerId: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const nativePeer = peer as any;
     if (!nativePeer || !nativePeer._pc) return;
 
     try {
       const stats = await nativePeer._pc.getStats();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       let activeCandidatePair: any = null;
 
-      // Tìm candidate đang active
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       stats.forEach((report: any) => {
         if (report.type === "transport" && report.selectedCandidatePairId) {
           activeCandidatePair = stats.get(report.selectedCandidatePairId);
         }
       });
 
-      // Fallback
+
       if (!activeCandidatePair) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         stats.forEach((report: any) => {
           if (
             report.type === "candidate-pair" &&
@@ -345,13 +347,12 @@ export const useWebRTC = (roomId: string, userName: string) => {
           const localType =
             remoteCandidate.candidateType === "relay" ? "relay" : "p2p";
 
-          // 1. Lưu Local Status
+
           if (!connStatusRef.current[peerId])
             connStatusRef.current[peerId] = { local: null, remote: null };
           connStatusRef.current[peerId].local = localType;
 
-          // 2. Gửi thông tin này cho bạn mình biết
-          // Gửi qua kênh Data Channel (vì lúc này đã kết nối rồi)
+
           try {
             peer.send(
               JSON.stringify({
@@ -369,7 +370,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
     }
   };
   const createPeer = (targetId: string, myId: string, initiator: boolean) => {
-    // Trong hàm createPeer
+
     const peer = new Peer({
       initiator,
       trickle: false,
@@ -379,12 +380,12 @@ export const useWebRTC = (roomId: string, userName: string) => {
       },
     });
     peer.on("connect", () => {
-      // Check ngay khi kết nối
+
       checkConnectionType(peer, targetId);
       setTimeout(() => checkConnectionType(peer, targetId), 2000);
       setTimeout(() => checkConnectionType(peer, targetId), 5000);
 
-      // Check lại sau 2s cho chắc (vì đôi khi nó đổi đường)
+
       setTimeout(() => checkConnectionType(peer, targetId), 2000);
     });
     peer.on("signal", (s) =>
@@ -495,7 +496,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
       peersRef.current = {};
       isInitiated.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [roomId, userName]);
 
   const cancelOutgoingFile = useCallback(
@@ -550,8 +551,10 @@ export const useWebRTC = (roomId: string, userName: string) => {
     acceptIncomingRequest,
     acceptedPeerId,
     setAcceptedPeerId,
-    receivedNotes, // Export state này
-    broadcastNote, // Export hàm này
+    receivedNotes,
+    broadcastNote,
     setReceivedNotes,
   };
 };
+
+

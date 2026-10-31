@@ -21,7 +21,7 @@ const IconLogout = () => <svg className="w-5 h-5" fill="none" stroke="currentCol
 const IconLightning = () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>;
 const IconCloud = () => <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>;
 const IconNote = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>;
-// Icon Copy
+
 const IconCopy = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>;
 const IconList = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>;
 type Lang = 'vi' | 'en';
@@ -31,9 +31,9 @@ const IconQueue = () => <svg className="w-5 h-5" fill="none" stroke="currentColo
 const IconCheck = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>;
 const IconClock = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 
-// --- CONFIG ---
+
 type QueueItem = { id: string; targetId: string; peerName: string; files: File[]; };
-const MAX_FILE_SIZE = 1 * 1024 * 1024 * 1024; // 2GB
+const MAX_FILE_SIZE = 1 * 1024 * 1024 * 1024;
 const MAX_FILE_COUNT = 100;
 
 const generateRoomCode = () => {
@@ -47,6 +47,7 @@ const generateRoomCode = () => {
 
 export default function Home() {
     const [isMounted, setIsMounted] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
 
 
     const [lang, setLang] = useState<Lang>('vi');
@@ -65,11 +66,11 @@ export default function Home() {
     const [isDragging, setIsDragging] = useState(false);
     const [showModeModal, setShowModeModal] = useState(false);
 
-    // Connection Error State
+
     const [joinError, setJoinError] = useState<string | null>(null);
     const [isCheckingLink, setIsCheckingLink] = useState(false);
 
-    // File Transfer State
+
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [queue, setQueue] = useState<QueueItem[]>([]);
     const [activeTask, setActiveTask] = useState<QueueItem | null>(null);
@@ -77,7 +78,7 @@ export default function Home() {
 
     const [showFilesModal, setShowFilesModal] = useState(false);
 
-    const [waitingForPeer, setWaitingForPeer] = useState<string | null>(null); // A đang chờ B (lưu ID của B)
+    const [waitingForPeer, setWaitingForPeer] = useState<string | null>(null);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
     const [showNoteModal, setShowNoteModal] = useState(false);
     const [noteContent, setNoteContent] = useState("");
@@ -89,20 +90,19 @@ export default function Home() {
     const [showQueuePanel, setShowQueuePanel] = useState(false);
     useEffect(() => {
         const handleOffline = () => {
-            // Khi mất mạng: Báo lỗi đỏ, rung máy (nếu có thể), chặn thao tác
+
             toast.error("Mất kết nối mạng! Quá trình truyền file có thể bị gián đoạn.", {
                 duration: 5000,
             });
         };
 
         const handleOnline = () => {
-            // Khi có mạng lại: Báo xanh, nhắc user kiểm tra
+
             toast.success("Đã có mạng trở lại. Nếu tiến trình bị đứng, hãy tải lại trang.", {
                 duration: 5000,
             });
 
-            // Pro tip: Có thể thử reconnect socket ở đây nếu muốn
-            // if (!socketRef.current?.connected) socketRef.current?.connect();
+
         };
 
         window.addEventListener('offline', handleOffline);
@@ -113,33 +113,39 @@ export default function Home() {
             window.removeEventListener('online', handleOnline);
         };
     }, []);
-    // --- INIT ---
+
     useEffect(() => {
         setIsMounted(true);
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        handleResize();
+        window.addEventListener('resize', handleResize);
+
         if (typeof window !== 'undefined') {
-            // Init User
+
             const stored = localStorage.getItem("p2p_username");
             setUsername(stored || generateIdentity());
 
-            // Init Theme
+
             const storedTheme = localStorage.getItem("p2p_theme") as Theme;
             if (storedTheme) setTheme(storedTheme);
             else if (window.matchMedia('(prefers-color-scheme: dark)').matches) setTheme('dark');
 
-            // Init Lang
+
             const storedLang = localStorage.getItem("p2p_lang") as Lang;
             if (storedLang) setLang(storedLang);
         }
+
+        return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Update DOM for Theme
+
     useEffect(() => {
         if (theme === 'dark') document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
         localStorage.setItem("p2p_theme", theme);
     }, [theme]);
 
-    // Save Lang
+
     useEffect(() => {
         localStorage.setItem("p2p_lang", lang);
     }, [lang]);
@@ -159,7 +165,7 @@ export default function Home() {
     const requestWakeLock = async () => {
         try {
             if ('wakeLock' in navigator) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
                 await (navigator as any).wakeLock.request('screen');
                 console.log('Screen Wake Lock active');
             }
@@ -172,7 +178,6 @@ export default function Home() {
     const text = t[lang];
 
 
-
     useEffect(() => {
         if (receivedNotes.length > 0) {
             const newNotes = receivedNotes.filter(n => !noteHistory.some(h => h.id === n.id));
@@ -183,8 +188,8 @@ export default function Home() {
                 if (!showNoteModal) {
                     setHasUnread(true);
                 } else {
-                    // Nếu đang mở modal thì thử scroll (nếu đang ở đáy)
-                    // Dùng setTimeout nhỏ để DOM kịp render tin nhắn mới trước khi tính toán
+
+
                     setTimeout(() => scrollToBottom(false), 50);
                 }
             }
@@ -211,7 +216,7 @@ export default function Home() {
 
     useEffect(() => {
         if (showNoteModal) {
-            // Chờ UI render xong (đặc biệt trên mobile) rồi mới scroll
+
             setTimeout(() => scrollToBottom(true), 100);
             setHasUnread(false);
         }
@@ -236,7 +241,7 @@ export default function Home() {
 
     useEffect(() => {
         if (acceptedPeerId && waitingForPeer === acceptedPeerId) {
-            // Tìm tên peer
+
             const peerName = peers.find(p => p.id === acceptedPeerId)?.name || "Unknown";
 
 
@@ -249,7 +254,7 @@ export default function Home() {
         }
     }, [acceptedPeerId, waitingForPeer, pendingFiles, peers, setAcceptedPeerId]);
 
-    // 2. KHI BỊ TỪ CHỐI
+
     useEffect(() => {
         if (rejectedQueueId) {
             if (waitingForPeer === rejectedQueueId) {
@@ -326,22 +331,18 @@ export default function Home() {
     }, [activeTask, downloadProgresses]);
 
     const handleSendNote = () => {
-        if (!noteContent.trim() || isCoolingDown) return; // Chặn nếu đang cooldown
+        if (!noteContent.trim() || isCoolingDown) return;
 
-        // Gửi đi
         const myNote = broadcastNote(noteContent, "ME");
         setNoteHistory(prev => [...prev, myNote]);
         setNoteContent("");
 
-        // Kích hoạt cooldown 1s
         setIsCoolingDown(true);
         setTimeout(() => setIsCoolingDown(false), 1000);
 
-        // Gửi xong thì bắt buộc scroll xuống đáy
         setTimeout(() => scrollToBottom(true), 100);
     };
 
-    // Hàm copy note
     const copyToClipboard = (txt: string) => {
         navigator.clipboard.writeText(txt);
         toast.success(text.copied);
@@ -376,13 +377,12 @@ export default function Home() {
             await sendBatchFiles(
                 peer,
                 currentTask.files,
-                // 👇 SỬA DÒNG NÀY: Hứng thêm current, total
                 (fName, pct, fileId, current, total) => setUploadProgress({
                     name: fName,
                     pct: Math.round(pct),
                     fileId,
-                    current, // Lưu vào state
-                    total    // Lưu vào state
+                    current,
+                    total
                 }),
                 (fileId) => isFileRejected(fileId)
             );
@@ -407,25 +407,25 @@ export default function Home() {
             files: filesToTransfer
         };
         setQueue(prev => [...prev, newTask]);
-        // setSelectedFiles([]); // Tùy ông muốn clear hay không
     };
 
 
-    const handleSendRequest = (targetId: string) => {
-        if (selectedFiles.length === 0) return;
-
-
-        setPendingFiles(selectedFiles);
+    const handleSendFilesDirectly = (targetId: string, files: File[]) => {
+        if (files.length === 0) return;
+        setPendingFiles(files);
         setWaitingForPeer(targetId);
         const dt = new DataTransfer();
-        selectedFiles.forEach(f => dt.items.add(f));
+        files.forEach(f => dt.items.add(f));
         notifyQueueAdd(targetId, dt.files);
     };
 
-    // Hủy yêu cầu khi đang chờ
+    const handleSendRequest = (targetId: string) => {
+        handleSendFilesDirectly(targetId, selectedFiles);
+    };
+
     const cancelRequest = () => {
         if (waitingForPeer) {
-            notifyQueueRemove(waitingForPeer); // Gửi tin hủy
+            notifyQueueRemove(waitingForPeer);
             setWaitingForPeer(null);
             setPendingFiles([]);
         }
@@ -439,13 +439,10 @@ export default function Home() {
     };
 
 
-
     const getShareLink = () => typeof window !== 'undefined' ? `${window.location.origin}?room=${displayRoomId}` : '';
 
-    // --- DRAG & DROP ---
     const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
     const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); if (!e.relatedTarget) setIsDragging(false); };
-    // [page.tsx] - Tìm hàm handleDrop
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
@@ -461,7 +458,6 @@ export default function Home() {
 
     const getPosition = (index: number, total: number) => {
         if (typeof window === 'undefined') return { x: 0, y: 0 };
-        const isMobile = window.innerWidth < 768;
         const radius = isMobile ? 120 : 220;
         const angle = (index / total) * 2 * Math.PI - (Math.PI / 2);
         return {
@@ -476,21 +472,16 @@ export default function Home() {
         setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     };
 
-    // Hàm xóa tất cả
     const clearAllFiles = () => {
         setSelectedFiles([]);
     };
 
 
-    // --- ACTIONS ---
-
-    // 1. TẠO PHÒNG MỚI
     const handleCreateRoom = async () => {
         setIsBusy(true);
         let newCode = "";
         let isExist = true;
 
-        // Loop để chắc chắn không trùng (dù tỉ lệ trùng thấp)
         while (isExist) {
             newCode = generateRoomCode();
             isExist = await checkRoomExists(newCode);
@@ -498,10 +489,9 @@ export default function Home() {
 
         setRoomId(newCode);
         setIsBusy(false);
-        setShowShareModal(true); // Auto hiện QR
+        setShowShareModal(true);
     };
 
-    // 2. NHẬP CODE (JOIN)
     const handleJoinRoom = async () => {
         if (!joinCodeInput || joinCodeInput.length < 5) return;
         setIsBusy(true);
@@ -520,15 +510,6 @@ export default function Home() {
     };
 
 
-
-
-
-
-
-
-
-
-    // --- MÀN HÌNH ERROR / CHECKING ---
     if (isCheckingLink || joinError) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-950 text-zinc-200 font-sans">
@@ -555,7 +536,7 @@ export default function Home() {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-            {/* DRAG OVERLAY */}
+
             {isDragging && (
                 <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center pointer-events-none">
                     <div className="text-white text-2xl font-bold border-2 border-white border-dashed p-10 rounded-2xl flex flex-col items-center gap-4">
@@ -565,9 +546,9 @@ export default function Home() {
                 </div>
             )}
 
-            {/* HEADER BAR */}
+
             <div className="absolute top-0 left-0 right-0 z-30 p-4 flex justify-between items-start pointer-events-none">
-                {/* Room Info */}
+
                 <div className="pointer-events-auto flex items-start gap-2">
                     <button
                         onClick={() => setShowModeModal(true)}
@@ -601,7 +582,7 @@ export default function Home() {
                     </div>
                 </div>
 
-                {/* File Button */}
+
                 <div className="relative pointer-events-auto flex flex-col items-end gap-2">
                     <div className="relative group">
                         <button className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold border transition-all ${selectedFiles.length > 0 ? 'bg-zinc-100 text-black border-zinc-100' : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-zinc-600'}`}>
@@ -638,12 +619,10 @@ export default function Home() {
                 </div>
             </div>
 
-            {/* --- MAP VISUALIZATION (CENTER) --- */}
+
             <div className="flex-1 flex items-center justify-center relative mt-16 md:mt-0">
 
-                {/* Cleaned up decorative rings (Deleted) */}
 
-                {/* YOU (Center Node) */}
                 <div className="relative z-20 w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center border-4 border-zinc-800 shadow-lg">
                     <div className="flex flex-col items-center text-zinc-400">
                         <IconUser />
@@ -651,7 +630,7 @@ export default function Home() {
                     </div>
                 </div>
 
-                {/* PEERS (Satellites) */}
+
                 {peers.length === 0 ? (
                     <div className="absolute top-[65%] text-center px-6 pointer-events-none">
                         <div className="text-zinc-500 text-sm font-medium mb-1 animate-pulse">
@@ -676,11 +655,8 @@ export default function Home() {
                                 ? receivingFile?.percentage || 0
                                 : 0;
 
-                        // Tính radius để vẽ line cho khớp với vị trí bong bóng
-                        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-                        const radius = isMobile ? 120 : 220; // Phải khớp với số trong hàm getPosition
+                        const radius = isMobile ? 120 : 220;
 
-                        // UI Logic: Grayscale/Zinc Theme
                         let ringClass = "border-zinc-800";
                         let StatusIcon = IconSmartphone;
                         let statusColor = "text-zinc-500";
@@ -708,29 +684,41 @@ export default function Home() {
                         return (
                             <div key={peer.id} className="absolute inset-0 pointer-events-none">
 
-                                {/* 1. CONNECTION LINE (Vẽ từ tâm màn hình ra) */}
+
                                 <div
                                     className="absolute top-1/2 left-1/2 h-[1px] bg-gradient-to-l from-zinc-700 to-transparent -z-10 origin-left"
                                     style={{
-                                        width: `${radius}px`, // Dài bằng bán kính
-                                        transform: `rotate(${(index / peers.length) * 360 - 90}deg)`, // Chỉ xoay góc
+                                        width: `${radius}px`,
+                                        transform: `rotate(${(index / peers.length) * 360 - 90}deg)`,
                                     }}
                                 ></div>
 
-                                {/* 2. PEER NODE (Dịch chuyển đến vị trí vệ tinh) */}
+
                                 <div
                                     className="absolute top-1/2 left-1/2 flex flex-col items-center justify-center transition-all duration-500 pointer-events-auto"
                                     style={{
-                                        // Dịch chuyển X, Y rồi lùi lại 50% để tâm bong bóng trùng khớp điểm nối line
                                         transform: `translate(${pos.x}px, ${pos.y}px) translate(-50%, -50%)`
                                     }}
                                 >
-                                    {/* Peer Node Bubble (Giữ nguyên code UI của ông) */}
+
                                     <div
                                         className={`
                                         w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center border-2 relative z-10 transition-all
                                         ${ringClass} ${cursorClass} hover:bg-zinc-800
                                     `}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (isBusy || incoming) return;
+                                            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                                const droppedFiles = Array.from(e.dataTransfer.files);
+                                                handleSendFilesDirectly(peer.id, droppedFiles);
+                                            }
+                                        }}
                                         onClick={() => {
                                             if (isBusy || incoming) return;
                                             if (hasFiles) handleSendRequest(peer.id);
@@ -757,18 +745,18 @@ export default function Home() {
                                         </div>
                                     </div>
 
-                                    {/* Connection Type Label */}
+
                                     {connType && !incoming && connType === 'p2p' && (
                                         <div className="absolute -bottom-4 bg-zinc-950 border border-zinc-800 text-zinc-500 px-2 py-0.5 rounded text-[8px] font-bold uppercase">
                                             FAST
                                         </div>
                                     )}
 
-                                    {/* Action Buttons for Incoming */}
+
                                     {incoming && !isReceiving && (
                                         <div className="absolute top-full mt-2 flex gap-2 z-20">
                                             <button
-                                                onClick={() => handleSendRequest(peer.id)} // Chỗ này ông đang gọi handleSendRequest, coi chừng nhầm với acceptIncomingRequest nhé
+                                                onClick={() => acceptIncomingRequest(incoming.peerId)}
                                                 className="bg-white hover:bg-zinc-200 text-black text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm"
                                             >
                                                 {text.receive}
@@ -788,16 +776,16 @@ export default function Home() {
                 )}
             </div>
 
-            {/* FOOTER NOTE */}
+
             <div className="p-4 text-center border-t border-zinc-900">
                 <p className="text-[10px] text-zinc-600 font-bold tracking-wide uppercase">
                     {text.keepAwake}
                 </p>
             </div>
 
-            {/* --- FLOATING SETTINGS (Lang Only - Removed Theme Toggle) --- */}
+
             <div className="fixed bottom-16 right-4 z-30 flex flex-col gap-3">
-                {/* Nút NOTE */}
+
                 <button
                     onClick={() => setShowNoteModal(true)}
                     className="w-10 h-10 bg-zinc-900 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:border-yellow-500 hover:text-yellow-500 transition-all shadow-lg"
@@ -812,7 +800,7 @@ export default function Home() {
                     )}
                 </button>
 
-                {/* Nút LANG (Cũ) */}
+
                 <button
                     onClick={() => setLang(l => l === 'vi' ? 'en' : 'vi')}
                     className="w-10 h-10 bg-zinc-900 rounded-full border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white font-bold text-xs hover:border-zinc-600 transition-colors"
@@ -824,12 +812,10 @@ export default function Home() {
 
             {showNoteModal && (
                 <div className="fixed inset-0 z-[70] flex flex-col md:items-center md:justify-center md:bg-black/80 md:p-4 bg-zinc-950">
-                    {/* Mobile: w-full h-full (Full screen)
-                       Desktop: max-w-md max-h-[80vh] rounded-2xl (Popup)
-                    */}
+
                     <div className="flex flex-col w-full h-[100dvh] md:h-auto md:max-h-[80vh] md:max-w-md bg-zinc-900 md:rounded-2xl border-zinc-800 md:border shadow-2xl overflow-hidden">
 
-                        {/* Header */}
+
                         <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-950 shrink-0">
                             <h3 className="font-bold text-white flex items-center gap-2 text-lg">
                                 {text.noteTitle}
@@ -842,9 +828,9 @@ export default function Home() {
                             </button>
                         </div>
 
-                        {/* List Notes - Gắn ref vào đây */}
+
                         <div
-                            ref={scrollContainerRef} // 👈 QUAN TRỌNG: Gắn ref vào container này
+                            ref={scrollContainerRef}
                             className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-900/50 scroll-smooth"
                         >
                             {noteHistory.length === 0 ? (
@@ -859,29 +845,26 @@ export default function Home() {
 
                                     return (
                                         <div key={note.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300 group/message`}>
-                                            {/* Sender Info */}
+
                                             <span className="text-[10px] text-zinc-500 mb-1 px-1 font-bold flex gap-2">
                                                 <span>{senderName}</span>
                                                 <span>{new Date(note.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </span>
 
-                                            {/* Message Bubble Container */}
+
                                             <div className="relative max-w-[85%]">
 
-                                                {/* 1. Nút Copy (Đã tối ưu) */}
+
                                                 <button
                                                     onClick={() => copyToClipboard(note.content)}
                                                     className={`
                         absolute top-2 w-8 h-8 flex items-center justify-center rounded-full transition-all z-10
                         ${isMe
-                                                            ? 'left-[-40px] text-zinc-500 hover:bg-zinc-800' // Tin mình -> Nút bên trái
-                                                            : 'right-[-40px] text-zinc-500 hover:bg-zinc-800' // Tin bạn -> Nút bên phải
+                                                            ? 'left-[-40px] text-zinc-500 hover:bg-zinc-800'
+                                                            : 'right-[-40px] text-zinc-500 hover:bg-zinc-800'
                                                         }
-                        
-                        /* UX Logic: 
-                           - Mobile: Luôn hiện (opacity-40) để biết là có nút, bấm vào thì sáng lên
-                           - Desktop (md): Ẩn đi (opacity-0), hover vào tin nhắn mới hiện (opacity-100)
-                        */
+
+
                         opacity-40 active:opacity-100 md:opacity-0 md:group-hover/message:opacity-100
                         active:scale-90 hover:text-white
                     `}
@@ -890,7 +873,7 @@ export default function Home() {
                                                     <IconCopy />
                                                 </button>
 
-                                                {/* 2. Nội dung tin nhắn */}
+
                                                 <div className={`
                     p-3 rounded-2xl text-sm md:text-base shadow-sm break-words whitespace-pre-wrap leading-relaxed
                     ${isMe
@@ -907,14 +890,13 @@ export default function Home() {
                             )}
                         </div>
 
-                        {/* Input Area */}
+
                         <div className="p-3 border-t border-zinc-800 bg-zinc-950 shrink-0 pb-safe">
                             <div className="flex gap-2 items-end">
                                 <textarea
                                     value={noteContent}
                                     onChange={(e) => setNoteContent(e.target.value.slice(0, 1000))}
                                     placeholder={text.typeNote}
-                                    // text-base để iOS không zoom khi focus
                                     className="flex-1 bg-zinc-900 text-white text-base rounded-2xl p-3 border border-zinc-800 focus:border-zinc-600 outline-none resize-none h-12 py-3 max-h-32 min-h-[48px]"
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && !e.shiftKey) {
@@ -947,7 +929,7 @@ export default function Home() {
                     </div>
                 </div>
             )}
-            {/* 1. FILE LIST MODAL */}
+
             {showFilesModal && (
                 <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
                     <div className="bg-zinc-900 rounded-2xl w-full max-w-sm border border-zinc-800 flex flex-col max-h-[80vh]">
@@ -982,7 +964,7 @@ export default function Home() {
                 </div>
             )}
 
-            {/* 2. MODE MENU MODAL */}
+
             {showModeModal && (
                 <div className="fixed inset-0 bg-black/80 z-[80] flex items-center justify-center p-4">
                     <div className="bg-zinc-900 w-full max-w-sm rounded-2xl border border-zinc-800 overflow-hidden flex flex-col">
@@ -1033,7 +1015,7 @@ export default function Home() {
                                 </>
                             )}
 
-                            {/* JOIN INPUT OVERLAY */}
+
                             {showJoinInput && (
                                 <div className="absolute inset-0 bg-zinc-900 z-10 flex flex-col p-6">
                                     <h3 className="font-bold mb-6 text-center text-lg text-white">{text.joinBtn}</h3>
@@ -1063,18 +1045,18 @@ export default function Home() {
                 </div>
             )}
 
-            {/* 3. QR SHARE MODAL */}
+
             {showShareModal && (
                 <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
                     <div className="bg-zinc-900 p-8 rounded-2xl w-full max-w-xs border border-zinc-800 flex flex-col items-center text-center">
                         <h2 className="font-bold text-lg mb-4 text-white">{text.scanQr}</h2>
 
-                        {/* QRCode giữ nguyên hàm getShareLink() vì mình đã sửa hàm đó ở trên rồi */}
+
                         <div className="bg-white p-2 rounded-xl mb-6">
                             <QRCodeSVG value={getShareLink()} size={160} />
                         </div>
 
-                        {/* 🔥 SỬA CHỖ NÀY: Thay actualRoomId bằng displayRoomId */}
+
                         <div className="font-black text-2xl mb-6 text-white tracking-widest bg-zinc-950 px-6 py-2 rounded-lg border border-zinc-800">
                             {displayRoomId}
                         </div>
@@ -1089,7 +1071,7 @@ export default function Home() {
                 </div>
             )}
 
-            {/* 4. WAITING MODAL */}
+
             {waitingForPeer && (
                 <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
                     <div className="bg-zinc-900 p-8 rounded-2xl flex flex-col items-center text-center max-w-sm w-full border border-zinc-800">
@@ -1115,7 +1097,7 @@ export default function Home() {
                 </div>
             )}
 
-            {/* 5. INCOMING REQUEST MODAL */}
+
             {incomingQueues.length > 0 && !waitingForPeer && (
                 <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
                     <div className="bg-zinc-900 p-6 rounded-2xl w-full max-w-sm border border-zinc-700 relative">
@@ -1164,7 +1146,7 @@ export default function Home() {
                     </div>
                 </div>
             )}
-            {/* 6. TRANSFER MANAGER */}
+
             {(activeTask || queue.length > 0 || Object.keys(downloadProgresses).length > 0) && (
                 <>
                     <div className="fixed bottom-16 left-4 z-30">
@@ -1338,3 +1320,4 @@ export default function Home() {
         </div>
     );
 }
+
